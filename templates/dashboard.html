@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        h1 { font-size: 2.5em; }
+        .main-btn, .logout-btn {
+            background: #e0e0e0;
+            color: #222;
+            padding: 6px 16px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1em;
+            font-family: inherit;
+            font-weight: normal;
+            margin-right: 10px;
+            margin-top: 10px;
+            transition: background 0.2s;
+            display: inline-block;
+        }
+        .main-btn:hover, .logout-btn:hover {
+            background: #cacaca;
+        }
+        #clock {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #session-block { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Willkommen im Dashboard!</h1>
+    <div id="clock"></div>
+    <div id="session-block"></div>
+    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+
+    <script>
+    // --- Live Clock ---
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- Jinja-змінні ---
+    let activeSession = {% if active_session and active_session.id is not none %}{{ active_session.id }}{% else %}null{% endif %};
+    let sessionStart = {% if active_session and active_session.start_time %}"{{ active_session.start_time.isoformat() }}"{% else %}null{% endif %};
+    let sessionEnd = {% if active_session and active_session.end_time %}"{{ active_session.end_time.isoformat() }}"{% else %}null{% endif %};
+
+    function renderSessionBlock() {
+        const sessionBlock = document.getElementById('session-block');
+        if (!activeSession) {
+            // Вивести консоль для діагностики
+            console.log('Die Sitzung ist nicht aktiv. Auswahl wird gebildet...');
+            fetch('/api/clients').then(r=>r.json()).then(clients => {
+                if (!Array.isArray(clients) || clients.length === 0) {
+                    sessionBlock.innerHTML = '<span style="color:red">Keine Kunden gefunden</span>';
+                    return;
+                }
+                let html = '<label>Kunde wählen: <select id="client-select"><option value="">Bitte wählen</option>';
+                clients.forEach(c => html += `<option value="${c.id}">${c.name}</option>`);
+                html += '</select></label> ';
+                html += '<button class="main-btn" id="start-btn" disabled>Arbeitbeginn</button>';
+                sessionBlock.innerHTML = html;
+                document.getElementById('client-select').addEventListener('change', function(){
+                    document.getElementById('start-btn').disabled = !this.value;
+                });
+                document.getElementById('start-btn').addEventListener('click', function(){
+                    let client_id = document.getElementById('client-select').value;
+                    fetch('/api/start_session', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({client_id: client_id})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data.success){
+                            activeSession = data.session_id;
+                            sessionStart = `"${data.start_time}"`;
+                            sessionEnd = null;
+                            renderSessionBlock();
+                        } else {
+                            alert(data.error || "Fehler beim Starten.");
+                        }
+                    });
+                });
+            }).catch(err => {
+                sessionBlock.innerHTML = '<span style="color:red">Clients konnten nicht geladen werden</span>';
+            });
+        } else if (activeSession && !sessionEnd) {
+            // Сесія активна: кнопка завершення
+            sessionBlock.innerHTML = '<button class="main-btn" id="end-btn">Arbeitende</button>';
+            document.getElementById('end-btn').onclick = function(){
+                fetch('/api/end_session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: activeSession})
+                })
+                .then(r=>r.json())
+                .then(data=>{
+                    if(data.success){
+                        activeSession = null;
+                        sessionStart = null;
+                        sessionEnd = null;
+                        renderSessionBlock();
+                    } else {
+                        alert(data.error || "Fehler beim Beenden.");
+                    }
+                });
+            };
+        }
+    }
+    renderSessionBlock();
+    </script>
+</body>
+</html>

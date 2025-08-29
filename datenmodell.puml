@@ -1,0 +1,43 @@
+@startuml
+
+enum UserRole {
+    User
+    Chef
+}
+
+entity "User" as User {
+    id : Integer
+    email : String
+    hashed_password : String
+    role : UserRole
+    first_name : String
+    last_name : String
+    active : Boolean
+    created_at : DateTime
+    updated_at : DateTime
+}
+
+entity "Client" as Client {
+    id : Integer
+    name : String
+    active : Boolean
+    created_at : DateTime
+    updated_at : DateTime
+}
+
+entity "Zeitbuchung" as Zeitbuchung {
+    id : Integer
+    user_id : Integer
+    client_id : Integer
+    start_time : DateTime
+    end_time : DateTime
+    comment : Text
+    created_at : DateTime
+    updated_at : DateTime
+}
+
+UserRole -- User : role
+User ||--o{ Zeitbuchung : ""
+Client ||--o{ Zeitbuchung : ""
+
+@enduml

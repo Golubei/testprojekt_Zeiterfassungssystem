@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Chef Dashboard</title>
+    <style>
+        .hidden { display: none; }
+        .visible { display: block; }
+        form { margin-bottom: 1em; display: inline; }
+        label { display: inline-block; min-width: 100px; }
+        .main-btn {
+            background: #e0e0e0;
+            color: #222;
+            padding: 6px 16px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            margin-right: 10px;
+            font-size: 1em;
+            font-family: inherit;
+            font-weight: normal;
+            transition: background 0.2s;
+        }
+        .main-btn:hover {
+            background: #cacaca;
+        }
+        .logout-btn {
+            background: #e0e0e0;
+            color: #222;
+            padding: 6px 16px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1em;
+            font-family: inherit;
+            font-weight: normal;
+            margin-top: 20px;
+            display: inline-block;
+            margin-right: 10px;
+            transition: background 0.2s;
+        }
+        .logout-btn:hover {
+            background: #cacaca;
+        }
+    </style>
+</head>
+<body>
+    <h1>Willkommen, Chef!</h1>
+    <hr>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul>
+        {% for category, message in messages %}
+          <li style="color:{% if category=='success' %}green{% else %}red{% endif %};">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post">
+        <button type="submit" name="show_user_form" class="main-btn">Mitarbeiter anlegen</button>
+    </form>
+    <form method="post">
+        <button type="submit" name="show_client_form" class="main-btn">Kunden anlegen</button>
+    </form>
+
+    <!-- Logout button -->
+    <br>
+    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+
+    <!-- Форма для співробітника -->
+    <div class="{% if user_form_visible %}visible{% else %}hidden{% endif %}" style="margin-top:20px;">
+      <form method="post">
+        <input type="hidden" name="create_user" value="1">
+        <label>Email: <input type="email" name="email" required></label><br>
+        <label>Vorname: <input type="text" name="first_name" required></label><br>
+        <label>Name: <input type="text" name="last_name" required></label><br>
+        <label>Password: <input type="password" name="password" required></label><br>
+        <label>Passwort bestätigen: <input type="password" name="password2" required></label><br>
+        <button type="submit" class="main-btn">Mitarbeiter anlegen</button>
+      </form>
+    </div>
+
+    <!-- Форма для клієнта -->
+    <div class="{% if client_form_visible %}visible{% else %}hidden{% endif %}" style="margin-top:20px;">
+      <form method="post">
+        <input type="hidden" name="create_client" value="1">
+        <label>Kunde Name: <input type="text" name="name" required></label><br>
+        <button type="submit" class="main-btn">Kunden anlegen</button>
+      </form>
+    </div>
+</body>
+</html>

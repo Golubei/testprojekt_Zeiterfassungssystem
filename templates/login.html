@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #fafbfc; 
+        }
+        .container {
+            max-width: 370px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            padding: 34px 28px 28px 28px;
+            box-shadow: 0 2px 24px rgba(0,0,0,0.09);
+        }
+        h1 {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 16px;
+            margin-bottom: 4px;
+        }
+        input[type="email"], input[type="password"] {
+            width: 100%;
+            padding: 9px;
+            font-size: 1em;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+            background: #f3f6fa;
+        }
+        button[type="submit"], .forgot-btn {
+            width: 100%;
+            background: #bdbdbd;
+            color: #222;
+            border: none;
+            padding: 13px 0;
+            margin-top: 14px;
+            font-size: 1.04em;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            transition: background 0.15s;
+            display: block;
+        }
+        button[type="submit"]:hover, .forgot-btn:hover {
+            background: #9e9e9e;
+        }
+        .forgot-btn {
+            background: #bdbdbd;
+            color: #222;
+            margin-top: 10px;
+            text-decoration: underline;
+            border: none;
+        }
+        .flash-danger { color: red; }
+        .flash-success { color: green; }
+    </style>
+    <script>
+      window.addEventListener('DOMContentLoaded', function() {
+        // Очищення полів навіть якщо браузер намагається автозаповнити
+        var email = document.getElementById('email');
+        var password = document.getElementById('password');
+        if(email) email.value = '';
+        if(password) password.value = '';
+      });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Login</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul>
+              {% for category, message in messages %}
+                <li class="flash-{{ category }}">{{ message }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+        <form method="POST" autocomplete="off">
+            <label for="email">Email:</label>
+            <input type="email" name="email" id="email" autocomplete="off" required>
+            
+            <label for="password">Passwort:</label>
+            <input type="password" name="password" id="password" autocomplete="off" required>
+            
+            <button type="submit" name="login">Login</button>
+        </form>
+        <form method="POST">
+            <input type="hidden" name="reset_email" id="reset_email" value="">
+            <button type="submit" name="forgot" class="forgot-btn" onclick="
+                event.preventDefault();
+                var email = prompt('Bitte geben Sie Ihre E-Mail für das Zurücksetzen des Passworts ein:');
+                if(email) {
+                  document.getElementById('reset_email').value = email;
+                  this.form.submit();
+                }
+            ">Passwort vergessen?</button>
+        </form>
+    </div>
+</body>
+</html>

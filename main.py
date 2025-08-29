@@ -22,7 +22,6 @@ def load_user(user_id):
     db.close()
     return user
 
-# Create all tables
 Base.metadata.create_all(bind=engine)
 
 @app.route("/")
@@ -92,7 +91,6 @@ def login():
                 return redirect(url_for("dashboard"))
         else:
             flash("Ungültige E-Mail oder Passwort.", "danger")
-    # GET або невірний логін:
     return render_template("login.html")
 
 def send_reset_email(email):
@@ -100,7 +98,6 @@ def send_reset_email(email):
     recipient = email
     subject = "Passwort zurücksetzen"
     body = "Sie haben eine Anfrage zum Zurücksetzen Ihres Passworts gestellt. Hier könnte Ihr Link stehen..."
-
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = sender
@@ -111,16 +108,16 @@ def send_reset_email(email):
     except Exception as e:
         print("Fehler beim Senden der E-Mail:", e)
 
+# ----------------- CHEF DASHBOARD -----------------
 @app.route("/chef/dashboard", methods=["GET", "POST"])
 @login_required
 def chef_dashboard():
     if not session.get("user_id") or session.get("user_role") != "Chef":
         flash("Der Zugriff ist verweigert!", "danger")
         return redirect(url_for("login"))
-
+    db = SessionLocal()
     user_form_visible = False
     client_form_visible = False
-
     if request.method == "POST":
         if "show_user_form" in request.form:
             user_form_visible = True
@@ -132,7 +129,6 @@ def chef_dashboard():
             last_name = request.form.get("last_name")
             password = request.form.get("password")
             password2 = request.form.get("password2")
-            db = SessionLocal()
             if db.query(User).filter(User.email == email).first():
                 flash("Ein Benutzer mit dieser E-Mail existiert bereits.", "danger")
                 user_form_visible = True
@@ -152,10 +148,8 @@ def chef_dashboard():
                 db.add(new_user)
                 db.commit()
                 flash("Mitarbeiter erstellt!", "success")
-            db.close()
         elif "create_client" in request.form:
             name = request.form.get("name")
-            db = SessionLocal()
             if db.query(Client).filter(Client.name == name).first():
                 flash("Ein Client mit diesem Namen existiert bereits.", "danger")
                 client_form_visible = True
@@ -164,12 +158,25 @@ def chef_dashboard():
                 db.add(new_client)
                 db.commit()
                 flash("Der Client wurde erstellt!", "success")
-            db.close()
-
+    clients = db.query(Client).filter_by(active=True).order_by(Client.name).all()
+    users = db.query(User).filter_by(active=True).order_by(User.last_name, User.first_name).all()
+    clients_dict = [{"id": c.id, "name": c.name} for c in clients]
+    users_dict = [{"id": u.id, "name": f"{u.first_name} {u.last_name}"} for u in users]
+    # Сесія самого шефа!
+    active_session = db.query(Zeitbuchung).filter_by(
+        user_id=current_user.id, end_time=None
+    ).order_by(Zeitbuchung.start_time.desc()).first()
+    now = datetime.now()
+    db.close()
     return render_template(
         "chef_dashboard.html",
         user_form_visible=user_form_visible,
         client_form_visible=client_form_visible,
+        clients=clients_dict,
+        users=users_dict,
+        active_session=active_session,
+        now=now,
+        user_role="Chef"
     )
 
 @app.route("/dashboard")
@@ -178,21 +185,17 @@ def dashboard():
     db = SessionLocal()
     try:
         clients = db.query(Client).filter_by(active=True).order_by(Client.name).all()
+        clients_dict = [{"id": c.id, "name": c.name} for c in clients]
         active_session = db.query(Zeitbuchung).filter_by(
             user_id=current_user.id, end_time=None
         ).order_by(Zeitbuchung.start_time.desc()).first()
         now = datetime.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        session_history = db.query(Zeitbuchung).filter(
-            Zeitbuchung.user_id == current_user.id,
-            Zeitbuchung.start_time >= month_start
-        ).order_by(Zeitbuchung.start_time.desc()).all()
         return render_template(
             'dashboard.html',
-            clients=clients,
+            clients=clients_dict,
             active_session=active_session,
-            session_history=session_history,
-            now=now
+            now=now,
+            user_role="User"
         )
     finally:
         db.close()
@@ -215,6 +218,16 @@ def api_clients():
     finally:
         db.close()
 
+@app.route('/api/users')
+@login_required
+def api_users():
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter_by(active=True).order_by(User.last_name, User.first_name).all()
+        return jsonify([{"id": u.id, "name": f"{u.first_name} {u.last_name}"} for u in users])
+    finally:
+        db.close()
+
 @app.route('/api/start_session', methods=['POST'])
 @login_required
 def api_start_session():
@@ -223,11 +236,12 @@ def api_start_session():
         client_id = request.json.get("client_id")
         if not client_id:
             return jsonify({"success": False, "error": "No client selected"}), 400
+        # Завжди для current_user!
         open_session = db.query(Zeitbuchung).filter_by(
             user_id=current_user.id, end_time=None
         ).first()
         if open_session:
-            return jsonify({"success": False, "error": "You have unfinished session"}), 400
+            return jsonify({"success": False, "error": "Es gibt eine offene Sitzung"}), 400
         zb = Zeitbuchung(
             user_id=current_user.id,
             client_id=client_id,
@@ -246,12 +260,14 @@ def api_end_session():
     db = SessionLocal()
     try:
         session_id = request.json.get("session_id")
-        zb = db.query(Zeitbuchung).filter_by(id=session_id, user_id=current_user.id).first()
+        zb = db.query(Zeitbuchung).filter_by(id=session_id).first()
         if not zb or zb.end_time:
             return jsonify({"success": False, "error": "Session not found or already ended"}), 400
+        if zb.user_id != current_user.id and current_user.role.value != "Chef":
+            return jsonify({"success": False, "error": "Nicht erlaubt"}), 403
         zb.end_time = datetime.now()
         db.commit()
-        return jsonify({"success": True, "end_time": zb.end_time.isoformat()})
+        return jsonify({"success": True, "session_id": zb.id})
     finally:
         db.close()
 
@@ -262,9 +278,13 @@ def api_finish_session():
     try:
         session_id = request.json.get("session_id")
         comment = request.json.get("comment", "")
-        zb = db.query(Zeitbuchung).filter_by(id=session_id, user_id=current_user.id).first()
+        zb = db.query(Zeitbuchung).filter_by(id=session_id).first()
         if not zb or not zb.end_time:
             return jsonify({"success": False, "error": "Session not ended"}), 400
+        if zb.user_id != current_user.id and current_user.role.value != "Chef":
+            return jsonify({"success": False, "error": "Nicht erlaubt"}), 403
+        if not comment.strip():
+            return jsonify({"success": False, "error": "Kommentar erforderlich"}), 400
         zb.comment = comment
         db.commit()
         return jsonify({"success": True})
@@ -274,21 +294,31 @@ def api_finish_session():
 @app.route('/api/session_history')
 @login_required
 def api_session_history():
+    client_id = request.args.get("client_id", type=int)
+    user_id = request.args.get("user_id", type=int)
     db = SessionLocal()
     try:
         now = datetime.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        history = db.query(Zeitbuchung).filter(
-            Zeitbuchung.user_id == current_user.id,
+        q = db.query(Zeitbuchung).filter(
             Zeitbuchung.start_time >= month_start
-        ).order_by(Zeitbuchung.start_time.desc()).all()
+        )
+        if current_user.role.value == "Chef":
+            if user_id:
+                q = q.filter(Zeitbuchung.user_id == user_id)
+        else:
+            q = q.filter(Zeitbuchung.user_id == current_user.id)
+        if client_id:
+            q = q.filter(Zeitbuchung.client_id == client_id)
+        q = q.order_by(Zeitbuchung.start_time.desc())
         result = []
-        for s in history:
+        for s in q:
             result.append({
                 "id": s.id,
+                "user": f"{s.user.first_name} {s.user.last_name}",
                 "client": s.client.name,
                 "start_time": s.start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "end_time": s.end_time.strftime('%Y-%m-%d %H:%M:%S') if s.end_time else None,
+                "end_time": s.end_time.strftime('%Y-%m-%d %H:%M:%S') if s.end_time else "",
                 "comment": s.comment or ""
             })
         return jsonify(result)

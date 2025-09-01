@@ -4,92 +4,229 @@
     <meta charset="UTF-8">
     <title>Chef Dashboard</title>
     <style>
-        .hidden { display: none; }
-        .visible { display: block; }
-        form { margin-bottom: 1em; display: inline; }
-        label { display: inline-block; min-width: 100px; }
-        .main-btn {
+        body { font-family: Arial, sans-serif; }
+        h1 { font-size: 2.5em; }
+        .main-btn, .logout-btn {
             background: #e0e0e0;
             color: #222;
             padding: 6px 16px;
             border: 1px solid #bdbdbd;
             border-radius: 4px;
             cursor: pointer;
-            text-decoration: none;
+            font-size: 1em;
             margin-right: 10px;
-            font-size: 1em;
-            font-family: inherit;
-            font-weight: normal;
+            margin-top: 10px;
             transition: background 0.2s;
-        }
-        .main-btn:hover {
-            background: #cacaca;
-        }
-        .logout-btn {
-            background: #e0e0e0;
-            color: #222;
-            padding: 6px 16px;
-            border: 1px solid #bdbdbd;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            font-size: 1em;
-            font-family: inherit;
-            font-weight: normal;
-            margin-top: 20px;
             display: inline-block;
-            margin-right: 10px;
-            transition: background 0.2s;
         }
-        .logout-btn:hover {
-            background: #cacaca;
-        }
+        .main-btn:hover, .logout-btn:hover { background: #cacaca; }
+        #clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
+        #session-block { margin-bottom: 20px; }
+        #comment-modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3);}
+        #comment-modal .modal-content { background:#fff; padding:20px; max-width:350px; margin:8vh auto; border-radius:7px; box-shadow:0 2px 16px #2225; }
+        #buchungen-filter { margin-bottom: 20px; }
+        table { border-collapse:collapse; width:100%; margin-top:10px; }
+        th,td { border:1px solid #bbb; padding:5px 10px; text-align:left; }
+        th { background:#f0f0f0; }
+        .form-block { margin: 20px 0; padding: 12px; background: #f8f8f8; border-radius: 7px; }
     </style>
 </head>
 <body>
-    <h1>Willkommen, Chef!</h1>
-    <hr>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul>
-        {% for category, message in messages %}
-          <li style="color:{% if category=='success' %}green{% else %}red{% endif %};">{{ message }}</li>
-        {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
-
-    <form method="post">
-        <button type="submit" name="show_user_form" class="main-btn">Mitarbeiter anlegen</button>
-    </form>
-    <form method="post">
-        <button type="submit" name="show_client_form" class="main-btn">Kunden anlegen</button>
-    </form>
-
-    <!-- Logout button -->
-    <br>
+    <h1>Chef Dashboard</h1>
+    <div id="clock"></div>
     <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
 
-    <!-- Форма для співробітника -->
-    <div class="{% if user_form_visible %}visible{% else %}hidden{% endif %}" style="margin-top:20px;">
-      <form method="post">
-        <input type="hidden" name="create_user" value="1">
-        <label>Email: <input type="email" name="email" required></label><br>
-        <label>Vorname: <input type="text" name="first_name" required></label><br>
-        <label>Name: <input type="text" name="last_name" required></label><br>
-        <label>Password: <input type="password" name="password" required></label><br>
-        <label>Passwort bestätigen: <input type="password" name="password2" required></label><br>
-        <button type="submit" class="main-btn">Mitarbeiter anlegen</button>
-      </form>
+    <!-- --- Створення користувача --- -->
+    <div class="form-block">
+        <form method="post">
+            <button type="submit" name="show_user_form" class="main-btn">Mitarbeiter anlegen</button>
+            {% if user_form_visible %}
+            <div>
+                <label>Vorname: <input type="text" name="first_name" required></label>
+                <label>Nachname: <input type="text" name="last_name" required></label>
+                <label>E-Mail: <input type="email" name="email" required></label>
+                <label>Passwort: <input type="password" name="password" required></label>
+                <label>Passwort wiederholen: <input type="password" name="password2" required></label>
+                <button type="submit" name="create_user" class="main-btn">Anlegen</button>
+            </div>
+            {% endif %}
+        </form>
     </div>
 
-    <!-- Форма для клієнта -->
-    <div class="{% if client_form_visible %}visible{% else %}hidden{% endif %}" style="margin-top:20px;">
-      <form method="post">
-        <input type="hidden" name="create_client" value="1">
-        <label>Kunde Name: <input type="text" name="name" required></label><br>
-        <button type="submit" class="main-btn">Kunden anlegen</button>
-      </form>
+    <!-- --- Створення клієнта --- -->
+    <div class="form-block">
+        <form method="post">
+            <button type="submit" name="show_client_form" class="main-btn">Client anlegen</button>
+            {% if client_form_visible %}
+            <div>
+                <label>Name: <input type="text" name="name" required></label>
+                <button type="submit" name="create_client" class="main-btn">Anlegen</button>
+            </div>
+            {% endif %}
+        </form>
     </div>
+
+    <!-- --- СТАРТ/СТОП сесії для шефа --- -->
+    <div id="session-block"></div>
+
+    <!-- --- Модальне вікно для коментаря --- -->
+    <div id="comment-modal">
+      <div class="modal-content">
+        <label for="comment-input">Kommentar (Pflicht):</label><br>
+        <textarea id="comment-input" rows="3" style="width:100%"></textarea>
+        <br>
+        <button id="comment-ok" class="main-btn" disabled>OK</button>
+      </div>
+    </div>
+
+    <div id="buchungen-filter"></div>
+    <div id="buchungen-table"></div>
+
+    <script>
+    // --- Live Clock ---
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- Jinja-змінні ---
+    let activeSession = {% if active_session and active_session.id is not none %}{{ active_session.id }}{% else %}null{% endif %};
+    let sessionEnd = {% if active_session and active_session.end_time %}"{{ active_session.end_time.isoformat() }}"{% else %}null{% endif %};
+    let userRole = "{{ user_role }}";
+    let clients = {{ clients|tojson }};
+    let users = {{ users|tojson if users else '[]' }};
+
+    // --- Session Block (Chef як User) ---
+    function renderSessionBlock() {
+        const sessionBlock = document.getElementById('session-block');
+        if (!activeSession) {
+            let html = '<label>Kunde wählen: <select id="client-select"><option value="">Bitte wählen</option>';
+            clients.forEach(c => html += `<option value="${c.id}">${c.name}</option>`);
+            html += '</select></label> ';
+            html += '<button class="main-btn" id="start-btn" disabled>Arbeitsbeginn</button>';
+            sessionBlock.innerHTML = html;
+            document.getElementById('client-select').addEventListener('change', function(){
+                document.getElementById('start-btn').disabled = !this.value;
+            });
+            document.getElementById('start-btn').addEventListener('click', function(){
+                let client_id = document.getElementById('client-select').value;
+                fetch('/api/start_session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({client_id: client_id})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if(data.success){
+                        activeSession = data.session_id;
+                        renderSessionBlock();
+                        renderBuchungen();
+                    } else {
+                        alert(data.error || "Fehler beim Starten.");
+                    }
+                });
+            });
+        } else if (activeSession && !sessionEnd) {
+            sessionBlock.innerHTML = '<button class="main-btn" id="end-btn">Arbeitende</button>';
+            document.getElementById('end-btn').onclick = function(){
+                fetch('/api/end_session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: activeSession})
+                })
+                .then(r=>r.json())
+                .then(data=>{
+                    if(data.success){
+                        showCommentModal();
+                    } else {
+                        alert(data.error || "Fehler beim Beenden.");
+                    }
+                });
+            };
+        }
+    }
+
+    // --- Коментар (обов'язковий) ---
+    function showCommentModal() {
+        const modal = document.getElementById('comment-modal');
+        const input = document.getElementById('comment-input');
+        const okBtn = document.getElementById('comment-ok');
+        input.value = "";
+        okBtn.disabled = true;
+        modal.style.display = "block";
+        input.oninput = function() {
+            okBtn.disabled = !input.value.trim();
+        };
+        okBtn.onclick = function() {
+            fetch('/api/finish_session', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_id: activeSession, comment: input.value.trim()})
+            }).then(r=>r.json()).then(data=>{
+                if(data.success){
+                    modal.style.display = "none";
+                    activeSession = null;
+                    sessionEnd = null;
+                    renderSessionBlock();
+                    renderBuchungen();
+                } else {
+                    alert(data.error || "Fehler beim Speichern des Kommentars.");
+                }
+            });
+        };
+    }
+    window.onclick = function(event) {
+        const modal = document.getElementById('comment-modal');
+        if (event.target === modal) modal.style.display = "none";
+    };
+
+    // --- Buchungenübersicht ---
+    let filterClient = "";
+    let filterUser = "";
+    function renderFilters() {
+        let html = "";
+        html += '<label>Kunde: <select id="filter-client"><option value="">Alle</option>';
+        clients.forEach(c => html += `<option value="${c.id}">${c.name}</option>`);
+        html += '</select></label> ';
+        html += '<label>Mitarbeiter: <select id="filter-user"><option value="">Alle</option>';
+        users.forEach(u => html += `<option value="${u.id}">${u.name}</option>`);
+        html += '</select></label> ';
+        document.getElementById('buchungen-filter').innerHTML = html;
+        document.getElementById('filter-client').value = filterClient;
+        document.getElementById('filter-client').onchange = function() {
+            filterClient = this.value;
+            renderBuchungen();
+        }
+        document.getElementById('filter-user').value = filterUser;
+        document.getElementById('filter-user').onchange = function() {
+            filterUser = this.value;
+            renderBuchungen();
+        }
+    }
+    function renderBuchungen() {
+        renderFilters();
+        let params = [];
+        if (filterClient) params.push("client_id="+encodeURIComponent(filterClient));
+        if (filterUser) params.push("user_id="+encodeURIComponent(filterUser));
+        fetch('/api/session_history' + (params.length ? "?" + params.join("&") : ""))
+            .then(r=>r.json())
+            .then(data=>{
+                let html = "<table><tr><th>Mitarbeiter</th><th>Kunde</th><th>Beginn</th><th>Ende</th><th>Kommentar</th></tr>";
+                for(let row of data){
+                    html += "<tr>";
+                    html += `<td>${row.user}</td>`;
+                    html += `<td>${row.client}</td><td>${row.start_time}</td><td>${row.end_time||""}</td><td>${row.comment||""}</td>`;
+                    html += "</tr>";
+                }
+                html += "</table>";
+                document.getElementById('buchungen-table').innerHTML = html;
+            });
+    }
+
+    renderSessionBlock();
+    renderBuchungen();
+    </script>
 </body>
 </html>

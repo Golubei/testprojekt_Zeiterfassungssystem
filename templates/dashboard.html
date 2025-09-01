@@ -75,7 +75,7 @@
     let users = {{ users|tojson if users else '[]' }};
     let currentUserName = "{{ current_user.first_name if current_user else '' }} {{ current_user.last_name if current_user else '' }}";
 
-    // --- Session Block --- (залишити як було)
+    // --- Session Block ---
     function renderSessionBlock() {
         const sessionBlock = document.getElementById('session-block');
         if (!activeSession) {
@@ -208,6 +208,9 @@
                     if (row.user === currentUserName && start.getMonth() === thisMonth && start.getFullYear() === thisYear) {
                         canEdit = canDelete = true;
                     }
+                    if (userRole === "Chef") {
+                        canEdit = canDelete = true;
+                    }
                     if (activeSession) canEdit = canDelete = false;
                     if (editingRowId === row.id) {
                         html += "<tr>";
@@ -253,13 +256,33 @@
                         });
                     };
                 });
+
+                // Ці кнопки з'являються тільки у режимі редагування
                 let saveBtn = document.getElementById('save-row');
                 if(saveBtn) saveBtn.onclick = function(){
+                    // --- Перевірка поточного календарного місяця ---
+                    let startVal = document.getElementById('edit-start').value;
+                    let endVal = document.getElementById('edit-end').value;
+                    let now = new Date();
+                    let allowedMonth = now.getMonth();
+                    let allowedYear = now.getFullYear();
+                    let startDate = startVal ? new Date(startVal) : null;
+                    let endDate = endVal ? new Date(endVal) : null;
+                    if (userRole !== "Chef") {
+                        if (
+                            (startDate && (startDate.getMonth() !== allowedMonth || startDate.getFullYear() !== allowedYear)) ||
+                            (endDate && (endDate.getMonth() !== allowedMonth || endDate.getFullYear() !== allowedYear))
+                        ) {
+                            alert("Bearbeitungsfehler! Änderungen sind nur im Kalendermonat möglich!");
+                            return;
+                        }
+                    }
+                    // --- Кінець перевірки ---
                     showConfirmModal("Bist du sicher, dass du die Änderungen speichern willst?", ()=>{
                         let payload = {
                             client_id: document.getElementById('edit-client').value,
-                            start_time: formatDateForBackend(document.getElementById('edit-start').value),
-                            end_time: formatDateForBackend(document.getElementById('edit-end').value),
+                            start_time: formatDateForBackend(startVal),
+                            end_time: formatDateForBackend(endVal),
                             comment: document.getElementById('edit-comment').value
                         };
                         fetch(`/api/session/${editingRowId}`, {
@@ -278,6 +301,7 @@
                         });
                     });
                 };
+
                 let cancelBtn = document.getElementById('cancel-row');
                 if(cancelBtn) cancelBtn.onclick = function(){
                     editingRowId = null;
@@ -285,6 +309,7 @@
                 };
             });
     }
+
     renderSessionBlock();
     renderBuchungen();
     </script>

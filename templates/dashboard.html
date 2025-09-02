@@ -4,21 +4,59 @@
     <meta charset="UTF-8">
     <title>Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; }
-        h1 { font-size: 2.5em; }
-        .main-btn, .logout-btn {
-            background: #e0e0e0;
-            color: #222;
-            padding: 6px 16px;
-            border: 1px solid #bdbdbd;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            margin-right: 10px;
-            margin-top: 10px;
-            transition: background 0.2s;
-            display: inline-block;
-        }
+            body { font-family: Arial, sans-serif; }
+h1 { font-size: 2.5em; }
+.main-btn, .logout-btn {
+    background: #e0e0e0;
+    color: #222;
+    padding: 6px 16px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-right: 10px;
+    margin-top: 10px;
+    transition: background 0.2s;
+    display: inline-block;
+}
+.main-btn:hover, .logout-btn:hover { background: #cacaca; }
+#clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
+#session-block { margin-bottom: 20px; }
+#comment-modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3);}
+#comment-modal .modal-content { background:#fff; padding:20px; max-width:350px; margin:8vh auto; border-radius:7px; box-shadow:0 2px 16px #2225; }
+table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    margin-top: 10px; 
+    table-layout: fixed; 
+}
+th, td { border:1px solid #bbb; padding:5px 10px; text-align:left; }
+th { background:#f0f0f0; }
+.form-block { margin: 20px 0; padding: 12px; background: #f8f8f8; border-radius: 7px; }
+button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Головний контейнер для фільтра і таблиці --- */
+.table-container {
+    width: 100%;
+    min-width: 900px; /* або скільки тобі треба */
+}
+
+/* --- Фільтр: розміщення в ряд і однакова ширина --- */
+#period-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 16px;
+    /* padding: 0 5px;  якщо треба */
+}
+
+/* Фіксуємо label, щоб вони не переносились */
+#period-filter label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
         .main-btn:hover, .logout-btn:hover { background: #cacaca; }
         #clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
         #session-block { margin-bottom: 20px; }
@@ -49,6 +87,7 @@
     <div id="buchungen-filter"></div>
     <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
     <div id="nachbuchung-row"></div>
+    <div id="period-filter" style="margin-bottom:16px;"></div>
     <div id="buchungen-table"></div>
     <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25);z-index:1001;">
       <div style="background:#fff;padding:22px 24px;max-width:380px;margin:12vh auto;border-radius:9px;box-shadow:0 2px 16px #2225;">
@@ -67,6 +106,8 @@ let users = {{ users|tojson if users else '[]' }};
 let currentUserName = "{{ current_user.first_name if current_user else '' }} {{ current_user.last_name if current_user else '' }}";
 let filterClient = "";
 let editingRowId = null;
+let filterStartDate = "";
+let filterEndDate = "";
 
 // --- Live Clock ---
 function pad(n) { return n < 10 ? "0" + n : n; }
@@ -192,10 +233,45 @@ function formatDateForBackend(val) {
     if (val.length === 16) return val.replace('T', ' ') + ":00";
     return val.replace('T', ' ');
 }
+(function setDefaultPeriodFilter(){
+    let now = new Date();
+    let yyyy = now.getFullYear();
+    let mm = String(now.getMonth() + 1).padStart(2, '0');
+    let firstDay = `${yyyy}-${mm}-01`;
+    let today = `${yyyy}-${mm}-${String(now.getDate()).padStart(2, '0')}`;
+    filterStartDate = firstDay;
+    filterEndDate = today;
+})();
+
+function renderPeriodFilter() {
+    let html = `
+        <label>Kunde: <select id="filter-client"><option value="">Alle</option>
+            ${clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select></label>
+        <label>Von: <input type="date" id="filter-startdate"></label>
+        <label>Bis: <input type="date" id="filter-enddate"></label>
+        <button class="main-btn" id="period-ok">Ok</button>
+    `;
+    document.getElementById('period-filter').innerHTML = html;
+
+    document.getElementById('filter-client').value = filterClient;
+    document.getElementById('filter-startdate').value = filterStartDate;
+    document.getElementById('filter-enddate').value = filterEndDate;
+
+    document.getElementById('period-ok').onclick = function() {
+        filterClient = document.getElementById('filter-client').value;
+        filterStartDate = document.getElementById('filter-startdate').value;
+        filterEndDate = document.getElementById('filter-enddate').value;
+        renderBuchungen();
+    };
+}
+
 function renderBuchungen() {
-    renderFilters();
+    renderPeriodFilter();
     let params = [];
     if (filterClient) params.push("client_id="+encodeURIComponent(filterClient));
+    if (filterStartDate) params.push("start_date="+encodeURIComponent(filterStartDate));
+    if (filterEndDate) params.push("end_date="+encodeURIComponent(filterEndDate));
     fetch('/api/session_history' + (params.length ? "?" + params.join("&") : ""))
         .then(r=>r.json())
         .then(data=>{

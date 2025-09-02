@@ -5,20 +5,58 @@
     <title>Chef Dashboard</title>
     <style>
         body { font-family: Arial, sans-serif; }
-        h1 { font-size: 2.5em; }
-        .main-btn, .logout-btn {
-            background: #e0e0e0;
-            color: #222;
-            padding: 6px 16px;
-            border: 1px solid #bdbdbd;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            margin-right: 10px;
-            margin-top: 10px;
-            transition: background 0.2s;
-            display: inline-block;
-        }
+h1 { font-size: 2.5em; }
+.main-btn, .logout-btn {
+    background: #e0e0e0;
+    color: #222;
+    padding: 6px 16px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-right: 10px;
+    margin-top: 10px;
+    transition: background 0.2s;
+    display: inline-block;
+}
+.main-btn:hover, .logout-btn:hover { background: #cacaca; }
+#clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
+#session-block { margin-bottom: 20px; }
+#comment-modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3);}
+#comment-modal .modal-content { background:#fff; padding:20px; max-width:350px; margin:8vh auto; border-radius:7px; box-shadow:0 2px 16px #2225; }
+table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    margin-top: 10px; 
+    table-layout: fixed; 
+}
+th, td { border:1px solid #bbb; padding:5px 10px; text-align:left; }
+th { background:#f0f0f0; }
+.form-block { margin: 20px 0; padding: 12px; background: #f8f8f8; border-radius: 7px; }
+button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Головний контейнер для фільтра і таблиці --- */
+.table-container {
+    width: 100%;
+    min-width: 900px; /* або скільки тобі треба */
+}
+
+/* --- Фільтр: розміщення в ряд і однакова ширина --- */
+#period-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 16px;
+    /* padding: 0 5px;  якщо треба */
+}
+
+/* Фіксуємо label, щоб вони не переносились */
+#period-filter label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
         .main-btn:hover, .logout-btn:hover { background: #cacaca; }
         #clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
         #session-block { margin-bottom: 20px; }
@@ -80,17 +118,19 @@
       </div>
     </div>
 
-    <div id="buchungen-filter"></div>
     <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
     <div id="nachbuchung-row"></div>
-    <div id="buchungen-table"></div>
-    <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25);z-index:1001;">
-      <div style="background:#fff;padding:22px 24px;max-width:380px;margin:12vh auto;border-radius:9px;box-shadow:0 2px 16px #2225;">
-        <div id="confirm-text" style="margin-bottom:18px;font-size:1.2em;">Bist du sicher?</div>
-        <button id="confirm-yes" class="main-btn">OK</button>
-        <button id="confirm-no" class="main-btn">Abbrechen</button>
-      </div>
+    <div class="table-container">
+         <div id="period-filter" style="margin-bottom:16px;"></div>
+         <div id="buchungen-table"></div>
     </div>
+    <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25);z-index:1001;">
+    <div style="background:#fff;padding:22px 24px;max-width:380px;margin:12vh auto;border-radius:9px;box-shadow:0 2px 16px #2225;">
+    <div id="confirm-text" style="margin-bottom:18px;font-size:1.2em;">Bist du sicher?</div>
+    <button id="confirm-yes" class="main-btn">OK</button>
+    <button id="confirm-no" class="main-btn">Abbrechen</button>
+  </div>
+</div>
     <script>
     // --- Live Clock ---
     function pad(n) { return n < 10 ? "0" + n : n; }
@@ -208,126 +248,153 @@
 
     // --- Buchungenübersicht ---
     let filterClient = "";
-    let filterUser = "";
-    let editingRowId = null;
-    function renderFilters() {
-        let html = "";
-        html += '<label>Kunde: <select id="filter-client"><option value="">Alle</option>';
-        clients.forEach(c => html += `<option value="${c.id}">${c.name}</option>`);
-        html += '</select></label> ';
-        html += '<label>Mitarbeiter: <select id="filter-user"><option value="">Alle</option>';
-        users.forEach(u => html += `<option value="${u.id}">${u.name}</option>`);
-        html += '</select></label> ';
-        document.getElementById('buchungen-filter').innerHTML = html;
-        document.getElementById('filter-client').value = filterClient;
-        document.getElementById('filter-client').onchange = function() {
-            filterClient = this.value;
-            renderBuchungen();
-        }
-        document.getElementById('filter-user').value = filterUser;
-        document.getElementById('filter-user').onchange = function() {
-            filterUser = this.value;
-            renderBuchungen();
-        }
-    }
-    function formatDateForBackend(val) {
-        if (!val) return "";
-        if (val.length === 16) return val.replace('T', ' ') + ":00";
-        return val.replace('T', ' ');
-    }
-    function renderBuchungen() {
-        renderFilters();
-        let params = [];
-        if (filterClient) params.push("client_id="+encodeURIComponent(filterClient));
-        if (filterUser) params.push("user_id="+encodeURIComponent(filterUser));
-        fetch('/api/session_history' + (params.length ? "?" + params.join("&") : ""))
-            .then(r=>r.json())
-            .then(data=>{
-                let html = "<table><tr>";
-                html+="<th>Mitarbeiter</th><th>Kunde</th><th>Beginn</th><th>Ende</th><th>Kommentar</th><th></th></tr>";
-                let now = new Date();
-                let thisMonth = now.getMonth(), thisYear = now.getFullYear();
-                for(let row of data){
-                    let canEdit = true, canDelete = true; // Chef може все
-                    if (activeSession) canEdit = canDelete = false;
-                    if (editingRowId === row.id) {
-                        html += "<tr>";
-                        html += `<td>${row.user}</td>`;
-                        html += `<td><select id="edit-client">`+clients.map(c=>
-                            `<option value="${c.id}" ${c.name===row.client?'selected':''}>${c.name}</option>`).join('')+`</select></td>`;
-                        html += `<td><input id="edit-start" type="datetime-local" value="${row.start_time.replace(' ', 'T')}" /></td>`;
-                        html += `<td><input id="edit-end" type="datetime-local" value="${row.end_time ? row.end_time.replace(' ', 'T') : ''}" /></td>`;
-                        html += `<td><input id="edit-comment" type="text" value="${row.comment||''}" style="width:90px;"/></td>`;
-                        html += `<td>
-                            <button class="main-btn" id="save-row">💾</button>
-                            <button class="main-btn" id="cancel-row">✖</button>
-                        </td></tr>`;
-                    } else {
-                        html += "<tr>";
-                        html += `<td>${row.user}</td>`;
-                        html += `<td>${row.client}</td><td>${row.start_time}</td><td>${row.end_time||""}</td><td>${row.comment||""}</td>`;
-                        html += `<td>
-                            <button class="main-btn" ${canEdit?'':'disabled'} id="edit-${row.id}">📝</button>
-                            <button class="main-btn" ${canDelete?'':'disabled'} id="del-${row.id}">🗑️</button>
-                        </td></tr>`;
-                    }
+let filterUser = "";
+let filterStartDate = "";
+let filterEndDate = "";
+let editingRowId = null;
+
+// --- Встановити дефолтні дати фільтра на поточний місяць ---
+(function setDefaultPeriodFilter(){
+    let now = new Date();
+    let yyyy = now.getFullYear();
+    let mm = String(now.getMonth() + 1).padStart(2, '0');
+    let firstDay = `${yyyy}-${mm}-01`;
+    let today = `${yyyy}-${mm}-${String(now.getDate()).padStart(2, '0')}`;
+    filterStartDate = firstDay;
+    filterEndDate = today;
+})();
+
+function renderPeriodFilter() {
+    let html = `
+        <label>Mitarbeiter: <select id="filter-user"><option value="">Alle</option>
+            ${users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+        </select></label>
+        <label>Kunde: <select id="filter-client"><option value="">Alle</option>
+            ${clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select></label>
+        <label>Von: <input type="date" id="filter-startdate"></label>
+        <label>Bis: <input type="date" id="filter-enddate"></label>
+        <button class="main-btn" id="period-ok">Ok</button>
+    `;
+    document.getElementById('period-filter').innerHTML = html;
+
+    document.getElementById('filter-client').value = filterClient;
+    document.getElementById('filter-user').value = filterUser;
+    document.getElementById('filter-startdate').value = filterStartDate;
+    document.getElementById('filter-enddate').value = filterEndDate;
+
+    document.getElementById('period-ok').onclick = function() {
+        filterClient = document.getElementById('filter-client').value;
+        filterUser = document.getElementById('filter-user').value;
+        filterStartDate = document.getElementById('filter-startdate').value;
+        filterEndDate = document.getElementById('filter-enddate').value;
+        renderBuchungen();
+    };
+}
+
+function renderBuchungen() {
+    renderPeriodFilter();
+    let params = [];
+    if (filterUser) params.push("user_id="+encodeURIComponent(filterUser));
+    if (filterClient) params.push("client_id="+encodeURIComponent(filterClient));
+    if (filterStartDate) params.push("start_date="+encodeURIComponent(filterStartDate));
+    if (filterEndDate) params.push("end_date="+encodeURIComponent(filterEndDate));
+    fetch('/api/session_history' + (params.length ? "?" + params.join("&") : ""))
+        .then(r=>r.json())
+        .then(data=>{
+            let html = "<table><tr>";
+            html+="<th>Mitarbeiter</th><th>Kunde</th><th>Beginn</th><th>Ende</th><th>Kommentar</th><th></th></tr>";
+            let now = new Date();
+            let thisMonth = now.getMonth(), thisYear = now.getFullYear();
+            for(let row of data){
+                let canEdit = true, canDelete = true; // Chef може все
+                if (activeSession) canEdit = canDelete = false;
+                if (editingRowId === row.id) {
+                    html += "<tr>";
+                    html += `<td>${row.user}</td>`;
+                    html += `<td><select id="edit-client">`+clients.map(c=>
+                        `<option value="${c.id}" ${c.name===row.client?'selected':''}>${c.name}</option>`).join('')+`</select></td>`;
+                    html += `<td><input id="edit-start" type="datetime-local" value="${row.start_time.replace(' ', 'T')}" /></td>`;
+                    html += `<td><input id="edit-end" type="datetime-local" value="${row.end_time ? row.end_time.replace(' ', 'T') : ''}" /></td>`;
+                    html += `<td><input id="edit-comment" type="text" value="${row.comment||''}" style="width:90px;"/></td>`;
+                    html += `<td>
+                        <button class="main-btn" id="save-row">💾</button>
+                        <button class="main-btn" id="cancel-row">✖</button>
+                    </td></tr>`;
+                } else {
+                    html += "<tr>";
+                    html += `<td>${row.user}</td>`;
+                    html += `<td>${row.client}</td><td>${row.start_time}</td><td>${row.end_time||""}</td><td>${row.comment||""}</td>`;
+                    html += `<td>
+                        <button class="main-btn" ${canEdit?'':'disabled'} id="edit-${row.id}">📝</button>
+                        <button class="main-btn" ${canDelete?'':'disabled'} id="del-${row.id}">🗑️</button>
+                    </td></tr>`;
                 }
-                html += "</table>";
-                document.getElementById('buchungen-table').innerHTML = html;
-                data.forEach(row=>{
-                    let editBtn = document.getElementById('edit-'+row.id);
-                    if(editBtn) editBtn.onclick = function(){
-                        if(editingRowId && editingRowId!==row.id) return;
-                        editingRowId = row.id;
-                        renderBuchungen();
-                    };
-                    let delBtn = document.getElementById('del-'+row.id);
-                    if(delBtn) delBtn.onclick = function(){
-                        showConfirmModal("Bist du sicher, dass du diese Sitzung löschen willst?", ()=>{
-                            fetch(`/api/session/${row.id}`, {method:'DELETE'})
-                            .then(r=>r.json())
-                            .then(res=>{
-                                if(res.success){
-                                    renderBuchungen();
-                                } else {
-                                    alert(res.error||"Fehler beim Löschen");
-                                }
-                            });
-                        });
-                    };
-                });
-                let saveBtn = document.getElementById('save-row');
-                if(saveBtn) saveBtn.onclick = function(){
-                    showConfirmModal("Bist du sicher, dass du die Änderungen speichern willst?", ()=>{
-                        let payload = {
-                            client_id: document.getElementById('edit-client').value,
-                            start_time: formatDateForBackend(document.getElementById('edit-start').value),
-                            end_time: formatDateForBackend(document.getElementById('edit-end').value),
-                            comment: document.getElementById('edit-comment').value
-                        };
-                        fetch(`/api/session/${editingRowId}`, {
-                            method: 'PUT',
-                            headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify(payload)
-                        })
+            }
+            html += "</table>";
+            document.getElementById('buchungen-table').innerHTML = html;
+            data.forEach(row=>{
+                let editBtn = document.getElementById('edit-'+row.id);
+                if(editBtn) editBtn.onclick = function(){
+                    if(editingRowId && editingRowId!==row.id) return;
+                    editingRowId = row.id;
+                    renderBuchungen();
+                };
+                let delBtn = document.getElementById('del-'+row.id);
+                if(delBtn) delBtn.onclick = function(){
+                    showConfirmModal("Bist du sicher, dass du diese Sitzung löschen willst?", ()=>{
+                        fetch(`/api/session/${row.id}`, {method:'DELETE'})
                         .then(r=>r.json())
                         .then(res=>{
                             if(res.success){
-                                editingRowId = null;
                                 renderBuchungen();
                             } else {
-                                alert(res.error||"Fehler beim Speichern");
+                                alert(res.error||"Fehler beim Löschen");
                             }
                         });
                     });
                 };
-                let cancelBtn = document.getElementById('cancel-row');
-                if(cancelBtn) cancelBtn.onclick = function(){
-                    editingRowId = null;
-                    renderBuchungen();
-                };
             });
-    }
+            let saveBtn = document.getElementById('save-row');
+            if(saveBtn) saveBtn.onclick = function(){
+                showConfirmModal("Bist du sicher, dass du die Änderungen speichern willst?", ()=>{
+                    let payload = {
+                        client_id: document.getElementById('edit-client').value,
+                        start_time: formatDateForBackend(document.getElementById('edit-start').value),
+                        end_time: formatDateForBackend(document.getElementById('edit-end').value),
+                        comment: document.getElementById('edit-comment').value
+                    };
+                    fetch(`/api/session/${editingRowId}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify(payload)
+                    })
+                    .then(r=>r.json())
+                    .then(res=>{
+                        if(res.success){
+                            editingRowId = null;
+                            renderBuchungen();
+                        } else {
+                            alert(res.error||"Fehler beim Speichern");
+                        }
+                    });
+                });
+            };
+            let cancelBtn = document.getElementById('cancel-row');
+            if(cancelBtn) cancelBtn.onclick = function(){
+                editingRowId = null;
+                renderBuchungen();
+            };
+        });
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+    document.getElementById('nachbuchung-btn').onclick = function(){
+        renderNachbuchungRow();
+    };
+    renderSessionBlock();
+    renderBuchungen();
+});
 
    function renderNachbuchungRow() {
     const container = document.getElementById('nachbuchung-row');

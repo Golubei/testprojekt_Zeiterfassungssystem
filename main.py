@@ -294,20 +294,28 @@ def api_finish_session():
 @app.route('/api/session_history')
 @login_required
 def api_session_history():
-    client_id = request.args.get("client_id", type=int)
     user_id = request.args.get("user_id", type=int)
+    client_id = request.args.get("client_id", type=int)
+    # Нове!
+    start_date = request.args.get("start_date")  # формат: 'YYYY-MM-DD'
+    end_date = request.args.get("end_date")      # формат: 'YYYY-MM-DD'
+
     db = SessionLocal()
     try:
-        now = datetime.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        q = db.query(Zeitbuchung).filter(
-            Zeitbuchung.start_time >= month_start
-        )
+        q = db.query(Zeitbuchung)
+        # --- Фільтр періоду ---
+        if start_date:
+            q = q.filter(Zeitbuchung.start_time >= datetime.strptime(start_date, "%Y-%m-%d"))
+        if end_date:
+            # до кінця дня
+            q = q.filter(Zeitbuchung.start_time <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+        # --- Фільтр юзера ---
         if current_user.role.value == "Chef":
             if user_id:
                 q = q.filter(Zeitbuchung.user_id == user_id)
         else:
             q = q.filter(Zeitbuchung.user_id == current_user.id)
+        # --- Фільтр клієнта ---
         if client_id:
             q = q.filter(Zeitbuchung.client_id == client_id)
         q = q.order_by(Zeitbuchung.start_time.desc())
@@ -315,7 +323,7 @@ def api_session_history():
         for s in q:
             result.append({
                 "id": s.id,
-                "user_id": s.user.id,  # <-- ДОДАЙ це поле!
+                "user_id": s.user.id,
                 "user": f"{s.user.first_name} {s.user.last_name}",
                 "client": s.client.name,
                 "start_time": s.start_time.strftime('%Y-%m-%d %H:%M:%S'),

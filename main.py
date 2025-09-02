@@ -398,6 +398,77 @@ def api_nachbuchung():
         import traceback
         print(traceback.format_exc())
         return jsonify({"success": False, "error": f"Interner Fehler: {str(e)}"}), 500
+
+@app.route('/api/session/<int:session_id>', methods=['PUT'])
+@login_required
+def api_edit_session(session_id):
+    db = SessionLocal()
+    try:
+        zb = db.query(Zeitbuchung).filter_by(id=session_id).first()
+        if not zb:
+            return jsonify({'success': False, 'error': 'Sitzung nicht gefunden'}), 404
+        now = datetime.now()
+        if current_user.role.value != "Chef":
+            if zb.user_id != current_user.id:
+                return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+            # Перевіряємо, що оригінальна сесія у поточному місяці
+            if zb.start_time.month != now.month or zb.start_time.year != now.year:
+                return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+        data = request.get_json()
+        # --- Перевірка зміни місяця для User ---
+        if current_user.role.value != "Chef":
+            # Який місяць дозволено
+            allowed_month = now.month
+            allowed_year = now.year
+            # старт
+            new_start_time = zb.start_time
+            if 'start_time' in data:
+                new_start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
+            # кінець (може бути порожнім)
+            new_end_time = zb.end_time
+            if 'end_time' in data:
+                if data['end_time']:
+                    new_end_time = datetime.strptime(data['end_time'], "%Y-%m-%d %H:%M:%S")
+                else:
+                    new_end_time = None
+            # Якщо змінюється місяць — заборонити
+            if (new_start_time.month != allowed_month or new_start_time.year != allowed_year) or (new_end_time and (new_end_time.month != allowed_month or new_end_time.year != allowed_year)):
+                return jsonify({'success': False, 'error': 'Bearbeitungsfehler! Änderungen sind nur im Kalendermonat möglich!'}), 400
+        # --- Оновлення ---
+        if 'client_id' in data:
+            zb.client_id = int(data['client_id'])
+        if 'start_time' in data:
+            zb.start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
+        if 'end_time' in data:
+            if data['end_time']:
+                zb.end_time = datetime.strptime(data['end_time'], "%Y-%m-%d %H:%M:%S")
+            else:
+                zb.end_time = None
+        if 'comment' in data:
+            zb.comment = data['comment']
+        db.commit()
+        return jsonify({'success': True})
+    finally:
+        db.close()
+
+@app.route('/api/session/<int:session_id>', methods=['DELETE'])
+@login_required
+def api_delete_session(session_id):
+    db = SessionLocal()
+    try:
+        zb = db.query(Zeitbuchung).filter_by(id=session_id).first()
+        if not zb:
+            return jsonify({'success': False, 'error': 'Sitzung nicht gefunden'}), 404
+        now = datetime.now()
+        if current_user.role.value != "Chef":
+            if zb.user_id != current_user.id:
+                return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+            if zb.start_time.month != now.month or zb.start_time.year != now.year:
+                return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+        db.delete(zb)
+        db.commit()
+        return jsonify({'success': True})
+
     finally:
         db.close()
 

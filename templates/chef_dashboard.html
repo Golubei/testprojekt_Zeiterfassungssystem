@@ -29,6 +29,7 @@
         th,td { border:1px solid #bbb; padding:5px 10px; text-align:left; }
         th { background:#f0f0f0; }
         .form-block { margin: 20px 0; padding: 12px; background: #f8f8f8; border-radius: 7px; }
+        button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -83,12 +84,21 @@
     <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
     <div id="nachbuchung-row"></div>
     <div id="buchungen-table"></div>
-
+    <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25);z-index:1001;">
+      <div style="background:#fff;padding:22px 24px;max-width:380px;margin:12vh auto;border-radius:9px;box-shadow:0 2px 16px #2225;">
+        <div id="confirm-text" style="margin-bottom:18px;font-size:1.2em;">Bist du sicher?</div>
+        <button id="confirm-yes" class="main-btn">OK</button>
+        <button id="confirm-no" class="main-btn">Abbrechen</button>
+      </div>
+    </div>
     <script>
     // --- Live Clock ---
+    function pad(n) { return n < 10 ? "0" + n : n; }
     function updateClock() {
         const now = new Date();
-        document.getElementById('clock').textContent = now.toLocaleString();
+        let y = now.getFullYear(), m = pad(now.getMonth()+1), d = pad(now.getDate());
+        let h = pad(now.getHours()), min = pad(now.getMinutes()), s = pad(now.getSeconds());
+        document.getElementById('clock').textContent = `${d}.${m}.${y}, ${h}:${min}:${s}`;
     }
     setInterval(updateClock, 1000);
     updateClock();
@@ -99,6 +109,7 @@
     let userRole = "{{ user_role }}";
     let clients = {{ clients|tojson }};
     let users = {{ users|tojson if users else '[]' }};
+    let currentUserName = "{{ current_user.first_name if current_user else '' }} {{ current_user.last_name if current_user else '' }}";
 
     // --- Session Block (Chef як User) ---
     function renderSessionBlock() {
@@ -149,8 +160,6 @@
             };
         }
     }
-
-    // --- Коментар (обов'язковий) ---
     function showCommentModal() {
         const modal = document.getElementById('comment-modal');
         const input = document.getElementById('comment-input');
@@ -184,9 +193,23 @@
         if (event.target === modal) modal.style.display = "none";
     };
 
+    // --- Confirm Modal ---
+    function showConfirmModal(text, onyes) {
+        document.getElementById('confirm-text').textContent = text;
+        document.getElementById('confirm-modal').style.display = 'block';
+        document.getElementById('confirm-yes').onclick = function() {
+            document.getElementById('confirm-modal').style.display = 'none';
+            onyes && onyes();
+        };
+        document.getElementById('confirm-no').onclick = function() {
+            document.getElementById('confirm-modal').style.display = 'none';
+        };
+    }
+
     // --- Buchungenübersicht ---
     let filterClient = "";
     let filterUser = "";
+    let editingRowId = null;
     function renderFilters() {
         let html = "";
         html += '<label>Kunde: <select id="filter-client"><option value="">Alle</option>';
@@ -207,6 +230,11 @@
             renderBuchungen();
         }
     }
+    function formatDateForBackend(val) {
+        if (!val) return "";
+        if (val.length === 16) return val.replace('T', ' ') + ":00";
+        return val.replace('T', ' ');
+    }
     function renderBuchungen() {
         renderFilters();
         let params = [];
@@ -215,15 +243,89 @@
         fetch('/api/session_history' + (params.length ? "?" + params.join("&") : ""))
             .then(r=>r.json())
             .then(data=>{
-                let html = "<table><tr><th>Mitarbeiter</th><th>Kunde</th><th>Beginn</th><th>Ende</th><th>Kommentar</th></tr>";
+                let html = "<table><tr>";
+                html+="<th>Mitarbeiter</th><th>Kunde</th><th>Beginn</th><th>Ende</th><th>Kommentar</th><th></th></tr>";
+                let now = new Date();
+                let thisMonth = now.getMonth(), thisYear = now.getFullYear();
                 for(let row of data){
-                    html += "<tr>";
-                    html += `<td>${row.user}</td>`;
-                    html += `<td>${row.client}</td><td>${row.start_time}</td><td>${row.end_time||""}</td><td>${row.comment||""}</td>`;
-                    html += "</tr>";
+                    let canEdit = true, canDelete = true; // Chef може все
+                    if (activeSession) canEdit = canDelete = false;
+                    if (editingRowId === row.id) {
+                        html += "<tr>";
+                        html += `<td>${row.user}</td>`;
+                        html += `<td><select id="edit-client">`+clients.map(c=>
+                            `<option value="${c.id}" ${c.name===row.client?'selected':''}>${c.name}</option>`).join('')+`</select></td>`;
+                        html += `<td><input id="edit-start" type="datetime-local" value="${row.start_time.replace(' ', 'T')}" /></td>`;
+                        html += `<td><input id="edit-end" type="datetime-local" value="${row.end_time ? row.end_time.replace(' ', 'T') : ''}" /></td>`;
+                        html += `<td><input id="edit-comment" type="text" value="${row.comment||''}" style="width:90px;"/></td>`;
+                        html += `<td>
+                            <button class="main-btn" id="save-row">💾</button>
+                            <button class="main-btn" id="cancel-row">✖</button>
+                        </td></tr>`;
+                    } else {
+                        html += "<tr>";
+                        html += `<td>${row.user}</td>`;
+                        html += `<td>${row.client}</td><td>${row.start_time}</td><td>${row.end_time||""}</td><td>${row.comment||""}</td>`;
+                        html += `<td>
+                            <button class="main-btn" ${canEdit?'':'disabled'} id="edit-${row.id}">📝</button>
+                            <button class="main-btn" ${canDelete?'':'disabled'} id="del-${row.id}">🗑️</button>
+                        </td></tr>`;
+                    }
                 }
                 html += "</table>";
                 document.getElementById('buchungen-table').innerHTML = html;
+                data.forEach(row=>{
+                    let editBtn = document.getElementById('edit-'+row.id);
+                    if(editBtn) editBtn.onclick = function(){
+                        if(editingRowId && editingRowId!==row.id) return;
+                        editingRowId = row.id;
+                        renderBuchungen();
+                    };
+                    let delBtn = document.getElementById('del-'+row.id);
+                    if(delBtn) delBtn.onclick = function(){
+                        showConfirmModal("Bist du sicher, dass du diese Sitzung löschen willst?", ()=>{
+                            fetch(`/api/session/${row.id}`, {method:'DELETE'})
+                            .then(r=>r.json())
+                            .then(res=>{
+                                if(res.success){
+                                    renderBuchungen();
+                                } else {
+                                    alert(res.error||"Fehler beim Löschen");
+                                }
+                            });
+                        });
+                    };
+                });
+                let saveBtn = document.getElementById('save-row');
+                if(saveBtn) saveBtn.onclick = function(){
+                    showConfirmModal("Bist du sicher, dass du die Änderungen speichern willst?", ()=>{
+                        let payload = {
+                            client_id: document.getElementById('edit-client').value,
+                            start_time: formatDateForBackend(document.getElementById('edit-start').value),
+                            end_time: formatDateForBackend(document.getElementById('edit-end').value),
+                            comment: document.getElementById('edit-comment').value
+                        };
+                        fetch(`/api/session/${editingRowId}`, {
+                            method: 'PUT',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify(payload)
+                        })
+                        .then(r=>r.json())
+                        .then(res=>{
+                            if(res.success){
+                                editingRowId = null;
+                                renderBuchungen();
+                            } else {
+                                alert(res.error||"Fehler beim Speichern");
+                            }
+                        });
+                    });
+                };
+                let cancelBtn = document.getElementById('cancel-row');
+                if(cancelBtn) cancelBtn.onclick = function(){
+                    editingRowId = null;
+                    renderBuchungen();
+                };
             });
     }
 
@@ -305,6 +407,7 @@ document.addEventListener("DOMContentLoaded", function(){
         renderNachbuchungRow();
     };
 });
+
     renderSessionBlock();
     renderBuchungen();
     </script>

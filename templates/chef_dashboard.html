@@ -264,6 +264,18 @@ let editingRowId = null;
     filterEndDate = today;
 })();
 
+function setDefaultPeriodFilter(){
+    let now = new Date();
+    let yyyy = now.getFullYear();
+    let mm = String(now.getMonth() + 1).padStart(2, '0');
+    let firstDay = `${yyyy}-${mm}-01`;
+    let today = `${yyyy}-${mm}-${String(now.getDate()).padStart(2, '0')}`;
+    filterStartDate = firstDay;
+    filterEndDate = today;
+    filterUser = "";
+    filterClient = "";
+}
+
 function renderPeriodFilter() {
     let html = `
         <label>Mitarbeiter: <select id="filter-user"><option value="">Alle</option>
@@ -275,6 +287,7 @@ function renderPeriodFilter() {
         <label>Von: <input type="date" id="filter-startdate"></label>
         <label>Bis: <input type="date" id="filter-enddate"></label>
         <button class="main-btn" id="period-ok">Ok</button>
+        <button class="main-btn" id="period-reset" style="margin-left:8px;">Reset</button>
     `;
     document.getElementById('period-filter').innerHTML = html;
 
@@ -288,6 +301,11 @@ function renderPeriodFilter() {
         filterUser = document.getElementById('filter-user').value;
         filterStartDate = document.getElementById('filter-startdate').value;
         filterEndDate = document.getElementById('filter-enddate').value;
+        renderBuchungen();
+    };
+
+    document.getElementById('period-reset').onclick = function() {
+        setDefaultPeriodFilter();
         renderBuchungen();
     };
 }

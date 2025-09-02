@@ -325,5 +325,82 @@ def api_session_history():
     finally:
         db.close()
 
+@app.route('/api/nachbuchung', methods=['POST'])
+@login_required
+def api_nachbuchung():
+    db = SessionLocal()
+    try:
+        data = request.get_json(force=True)  # force=True щоб завжди парсив JSON
+
+        # 1. Визначаємо user_id
+        if current_user.role.value == "Chef":
+            user_id_raw = data.get("user_id")
+            if not user_id_raw or str(user_id_raw).strip() == "":
+                return jsonify({"success": False, "error": "Mitarbeiter wählen!"}), 400
+            try:
+                user_id = int(user_id_raw)
+            except Exception:
+                return jsonify({"success": False, "error": "Ungültige Mitarbeiter-ID!"}), 400
+            # Перевіряємо, що юзер існує та активний
+            user = db.query(User).filter_by(id=user_id, active=True).first()
+            if not user:
+                return jsonify({"success": False, "error": "Mitarbeiter existiert nicht!"}), 400
+        else:
+            user_id = current_user.id
+
+        # 2. client_id
+        client_id_raw = data.get("client_id")
+        if not client_id_raw or str(client_id_raw).strip() == "":
+            return jsonify({"success": False, "error": "Kunde wählen!"}), 400
+        try:
+            client_id = int(client_id_raw)
+        except Exception:
+            return jsonify({"success": False, "error": "Ungültige Kunden-ID!"}), 400
+        # перевіряємо, що клієнт існує та активний
+        client = db.query(Client).filter_by(id=client_id, active=True).first()
+        if not client:
+            return jsonify({"success": False, "error": "Kunde existiert nicht!"}), 400
+
+        # 3. Дати/час
+        start_time = data.get("start_time")
+        end_time = data.get("end_time")
+        comment = data.get("comment", "")
+
+        # 4. Перевірка обов'язкових полів
+        if not all([user_id, client_id, start_time, end_time, comment.strip()]):
+            return jsonify({"success": False, "error": "Alle Felder sind Pflichtfelder!"}), 400
+
+        # 5. Дата-час формат
+        try:
+            dt_start = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+            dt_end = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return jsonify({"success": False, "error": "Ungültiges Datum/Zeit!"}), 400
+
+        # 6. Перевірка: чи кінець після початку
+        if dt_start >= dt_end:
+            return jsonify({"success": False, "error": "Beginn muss vor Ende liegen!"}), 400
+
+        # 7. (Опціонально) Чи не перетинається з іншими Buchungen? Тут можна додати перевірку, якщо потрібно
+
+        # 8. Створення записи
+        zb = Zeitbuchung(
+            user_id=user_id,
+            client_id=client_id,
+            start_time=dt_start,
+            end_time=dt_end,
+            comment=comment.strip()
+        )
+        db.add(zb)
+        db.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": f"Interner Fehler: {str(e)}"}), 500
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     app.run(debug=True)
+

@@ -80,6 +80,8 @@
     </div>
 
     <div id="buchungen-filter"></div>
+    <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
+    <div id="nachbuchung-row"></div>
     <div id="buchungen-table"></div>
 
     <script>
@@ -225,6 +227,84 @@
             });
     }
 
+   function renderNachbuchungRow() {
+    const container = document.getElementById('nachbuchung-row');
+    if (container.innerHTML.trim()) return; // prevent duplicate form
+
+    let html = `
+        <table><tr>
+            <td>
+                <select id="nach-user">
+                    <option value="">Mitarbeiter wählen</option>
+                    ${users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}
+                </select>
+            </td>
+            <td>
+                <select id="nach-client">
+                    <option value="">Kunde wählen</option>
+                    ${clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+                </select>
+            </td>
+            <td><input id="nach-start" type="datetime-local"></td>
+            <td><input id="nach-end" type="datetime-local"></td>
+            <td><input id="nach-comment" type="text" placeholder="Kommentar"></td>
+            <td>
+                <button class="main-btn" id="nach-ok" disabled>OK</button>
+                <button class="main-btn" id="nach-cancel">✖</button>
+            </td>
+        </tr></table>
+    `;
+    container.innerHTML = html;
+
+    function validate() {
+        const isValid = document.getElementById('nach-user').value &&
+            document.getElementById('nach-client').value &&
+            document.getElementById('nach-start').value &&
+            document.getElementById('nach-end').value &&
+            document.getElementById('nach-comment').value.trim();
+        document.getElementById('nach-ok').disabled = !isValid;
+    }
+    ['nach-user','nach-client', 'nach-start', 'nach-end', 'nach-comment'].forEach(id=>{
+        document.getElementById(id).oninput = validate;
+    });
+
+    document.getElementById('nach-cancel').onclick = ()=>{
+        container.innerHTML = "";
+    };
+
+    document.getElementById('nach-ok').onclick = ()=>{
+        // підтвердження
+        if (window.confirm("Bist du sicher, dass du diese Nachbuchung anlegen willst?")) {
+            fetch('/api/nachbuchung', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    user_id: document.getElementById('nach-user').value,
+                    client_id: document.getElementById('nach-client').value,
+                    start_time: document.getElementById('nach-start').value.replace('T',' ') + ":00",
+                    end_time: document.getElementById('nach-end').value.replace('T',' ') + ":00",
+                    comment: document.getElementById('nach-comment').value.trim()
+                })
+            })
+            .then(r=>r.json())
+            .then(res=>{
+                if(res.success){
+                    container.innerHTML = "";
+                    renderBuchungen();
+                } else {
+                    alert(res.error||"Fehler beim Erstellen!");
+                }
+            })
+            .catch(e => alert("Fehler beim Netzwerk/Server: " + e));
+        }
+    };
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+    document.getElementById('nachbuchung-btn').onclick = function(){
+        renderNachbuchungRow();
+    };
+});
     renderSessionBlock();
     renderBuchungen();
     </script>

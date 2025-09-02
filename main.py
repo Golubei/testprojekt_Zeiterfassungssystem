@@ -315,6 +315,7 @@ def api_session_history():
         for s in q:
             result.append({
                 "id": s.id,
+                "user_id": s.user.id,  # <-- ДОДАЙ це поле!
                 "user": f"{s.user.first_name} {s.user.last_name}",
                 "client": s.client.name,
                 "start_time": s.start_time.strftime('%Y-%m-%d %H:%M:%S'),

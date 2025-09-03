@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Statistik</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        h1 { font-size: 2.2em; margin-bottom: 20px; }
+        #clock { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
+        .logout-btn {
+            background: #e0e0e0;
+            color: #222;
+            padding: 6px 16px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+            margin-top: 10px;
+            transition: background 0.2s;
+            display: inline-block;
+        }
+        .logout-btn:hover { background: #cacaca; }
+        #statistik-controls {
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+        }
+        #statistik-canvas-block {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            width: 100vw;
+            margin-bottom: 18px;
+        }
+        #statistik-canvas {
+            width: 1200px !important;
+            height: 550px !important;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 2px 14px #2222;
+            margin: 0 auto;
+            display: block;
+        }
+        #summary-block { margin-bottom:16px;font-weight:bold; font-size:1.3em; margin-left: 32px;}
+        #popup-bg {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.20);
+            z-index: 9999;
+        }
+        #popup-content {
+            background: #fff;
+            min-width: 340px;
+            max-width: 480px;
+            margin: 10vh auto;
+            padding: 28px 28px 16px 28px;
+            border-radius: 8px;
+            box-shadow: 0 2px 16px #2225;
+            position: relative;
+        }
+        #popup-close {
+            position: absolute; top: 9px; right: 12px; font-size: 1.3em; cursor: pointer;
+            background: none; border: none; color: #444;
+        }
+        #popup-title { font-size: 1.1em; font-weight: bold; margin-bottom: 14px; }
+        #popup-chart-canvas { width: 400px; height: 260px; }
+        .main-btn {
+            font-size: 1.3em;
+            font-weight: bold;
+            padding: 4px 16px;
+            border-radius: 4px;
+            border: 2px solid #222;
+            background: #fff;
+            cursor: pointer;
+            margin: 0 2px;
+        }
+        #year-label {
+            font-size: 1.6em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            min-width: 80px;
+            text-align: center;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Statistik</h1>
+    <div id="clock"></div>
+    <div style="margin-bottom: 10px;">
+        <a href="{{ url_for('chef_dashboard') }}" class="logout-btn">Zurück zum Dashboard</a>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </div>
+    <hr>
+    <div id="statistik-controls">
+        <button id="prev-year" class="main-btn">&larr;</button>
+        <span id="year-label"></span>
+        <button id="next-year" class="main-btn">&rarr;</button>
+    </div>
+    <div id="statistik-canvas-block">
+        <canvas id="statistik-canvas"></canvas>
+    </div>
+    <div id="summary-block"></div>
+
+    <div id="popup-bg">
+        <div id="popup-content">
+            <button id="popup-close">✖</button>
+            <div id="popup-title"></div>
+            <canvas id="popup-chart-canvas" width="400" height="260"></canvas>
+        </div>
+    </div>
+    <script>
+    // --- Live Clock ---
+    function pad(n) { return n < 10 ? "0" + n : n; }
+    function updateClock() {
+        const now = new Date();
+        let y = now.getFullYear(), m = pad(now.getMonth()+1), d = pad(now.getDate());
+        let h = pad(now.getHours()), min = pad(now.getMinutes()), s = pad(now.getSeconds());
+        document.getElementById('clock').textContent = `${d}.${m}.${y}, ${h}:${min}:${s}`;
+    }
+    setInterval(updateClock, 1000); updateClock();
+
+    const COLORS = [
+        "rgba(54, 162, 235, 0.85)", "rgba(255, 99, 132, 0.85)", "rgba(255, 206, 86, 0.85)",
+        "rgba(75, 192, 192, 0.85)", "rgba(153, 102, 255, 0.85)", "rgba(255, 159, 64, 0.85)",
+        "rgba(99, 255, 132, 0.85)", "rgba(206, 255, 86, 0.85)", "rgba(192, 75, 192, 0.85)",
+        "rgba(102, 153, 255, 0.85)", "rgba(159, 255, 64, 0.85)", "rgba(132, 99, 255, 0.85)"
+    ];
+
+    let currentYear = new Date().getFullYear();
+    let statistikData = null;
+    let statistikChart = null;
+    const actualYear = new Date().getFullYear();
+
+    function updateYearControls() {
+        document.getElementById('year-label').textContent = currentYear;
+        if (currentYear >= actualYear) {
+            document.getElementById('next-year').style.display = 'none';
+        } else {
+            document.getElementById('next-year').style.display = '';
+        }
+    }
+
+    function renderYearLabel(year) {
+        updateYearControls();
+    }
+
+    function loadStatistik(year) {
+        fetch(`/api/statistik?year=${year}`)
+        .then(r => r.json())
+        .then(data => {
+            statistikData = data;
+            renderYearLabel(year);
+            renderMainChart();
+            renderSummaryBlock();
+        });
+    }
+
+    function renderSummaryBlock() {
+        if (!statistikData) return;
+        let sum = Object.values(statistikData.summary).reduce((a,b)=>a+b,0);
+        document.getElementById('summary-block').textContent =
+            `Gesamtstunden im Jahr: ${sum.toFixed(1)}`;
+    }
+
+    function renderMainChart() {
+        if (!statistikData) return;
+        const canvas = document.getElementById('statistik-canvas');
+        canvas.width = 1200;
+        canvas.height = 550;
+        const ctx = canvas.getContext('2d');
+        if (statistikChart) statistikChart.destroy();
+
+        // labels - завжди 12 місяців
+        const months = statistikData.months && statistikData.months.length === 12
+            ? statistikData.months
+            : ["Jan.", "Feb.", "März", "Apr.", "Mai", "Jun.", "Jul.", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
+
+        const clients = statistikData.clients || [];
+        const main_chart = statistikData.main_chart || {};
+
+        let datasets = clients.map((c, idx) => ({
+            label: c.name,
+            data: months.map((m, i) => {
+                let key = `${statistikData.year}-${(i+1).toString().padStart(2,"0")}`;
+                return main_chart[key] && typeof main_chart[key][c.id] === "number"
+                    ? main_chart[key][c.id]
+                    : 0;
+            }),
+            backgroundColor: COLORS[idx % COLORS.length],
+        }));
+
+        statistikChart = new Chart(ctx, {
+            type: "bar",
+            data: { labels: months, datasets: datasets },
+            options: {
+                plugins: {
+                    legend: { position: "top" },
+                    title: {
+                        display: true,
+                        text: `Stunden nach Monat und Kunde (${statistikData.year})`
+                    },
+                    tooltip: {
+                        enabled: true,
+                        callbacks: {
+                            label: function(context) {
+                                let val = context.parsed.y;
+                                return `${context.dataset.label}: ${val.toFixed(1)} Std.`;
+                            }
+                        }
+                    }
+                },
+                responsive: false,
+                maintainAspectRatio: false,
+                indexAxis: 'x',
+                scales: {
+                    x: {
+                        title: { display: true, text: "Monat" },
+                        grid: { display: true }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        min: 0,
+                        max: 550,
+                        stepSize: 20,
+                        title: { display: true, text: "Stunde" },
+                        grid: { display: true },
+                        ticks: { stepSize: 20 }
+                    }
+                }
+            }
+        });
+    }
+
+    document.getElementById('statistik-canvas').onclick = function(evt) {
+        if (!statistikChart) return;
+        const points = statistikChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+        if (points.length) {
+            const el = points[0];
+            const monthIdx = el.index;
+            const clientIdx = el.datasetIndex;
+            const monthKey = `${statistikData.year}-${(monthIdx+1).toString().padStart(2,"0")}`;
+            const clientId = statistikData.clients[clientIdx].id;
+            showPopup(monthKey, clientId);
+        }
+    };
+
+    let popupChart = null;
+    function showPopup(monthKey, clientId) {
+        let popup = document.getElementById('popup-bg');
+        let popupTitle = document.getElementById('popup-title');
+        let popupCanvas = document.getElementById('popup-chart-canvas');
+        popupCanvas.width = 400;
+        popupCanvas.height = 260;
+
+        let clientObj = statistikData.clients.find(c => c.id === clientId);
+        let clientName = clientObj ? clientObj.name : "Unbekannt";
+        let monthIdx = parseInt(monthKey.split('-')[1], 10) - 1;
+        let monthName = statistikData.months && statistikData.months[monthIdx] ? statistikData.months[monthIdx] : ["Jan.", "Feb.", "März", "Apr.", "Mai", "Jun.", "Jul.", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."][monthIdx];
+        popupTitle.textContent = `Kunde: ${clientName} — ${monthName} ${statistikData.year}`;
+
+        let popupData = statistikData.popup_data[monthKey] && statistikData.popup_data[monthKey][clientId];
+        let users = statistikData.users || [];
+        let labels = [];
+        let values = [];
+        if (popupData) {
+            for (let u of users) {
+                if (popupData[u.id]) {
+                    labels.push(u.name);
+                    values.push(popupData[u.id]);
+                }
+            }
+        }
+        labels.push("Gesamt");
+        let total = values.reduce((a,b)=>a+b,0);
+        values.push(total);
+
+        if (popupChart) popupChart.destroy();
+        popupChart = new Chart(popupCanvas.getContext('2d'), {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "Stunden",
+                    data: values,
+                    backgroundColor: COLORS.slice(0, labels.length)
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: "Stunden je Mitarbeiter und Gesamt"
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        min: 0,
+                        max: 550,
+                        stepSize: 20,
+                        title: {display:true, text:"Stunde"},
+                        ticks: { stepSize: 20 }
+                    },
+                    y: { title: {display:true, text:"Mitarbeiter"} }
+                }
+            }
+        });
+
+        popup.style.display = "block";
+        document.getElementById('popup-close').onclick = function() {
+            popup.style.display = "none";
+        };
+        popup.onclick = function(e) {
+            if (e.target === popup) popup.style.display = "none";
+        };
+    }
+
+    document.getElementById('prev-year').onclick = function() {
+        currentYear--;
+        loadStatistik(currentYear);
+    };
+    document.getElementById('next-year').onclick = function() {
+        currentYear++;
+        loadStatistik(currentYear);
+    };
+
+    loadStatistik(currentYear);
+    </script>
+</body>
+</html>

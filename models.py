@@ -6,6 +6,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from flask_login import UserMixin          # ДОДАТИ!
 from db import Base
+import calendar
 
 class UserRole(Enum):
     User = "User"

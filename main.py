@@ -6,6 +6,7 @@ from db import SessionLocal, Base, engine
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
+import calendar
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
@@ -236,7 +237,6 @@ def api_start_session():
         client_id = request.json.get("client_id")
         if not client_id:
             return jsonify({"success": False, "error": "No client selected"}), 400
-        # Завжди для current_user!
         open_session = db.query(Zeitbuchung).filter_by(
             user_id=current_user.id, end_time=None
         ).first()
@@ -296,31 +296,34 @@ def api_finish_session():
 def api_session_history():
     user_id = request.args.get("user_id", type=int)
     client_id = request.args.get("client_id", type=int)
-    # Нове!
-    start_date = request.args.get("start_date")  # формат: 'YYYY-MM-DD'
-    end_date = request.args.get("end_date")      # формат: 'YYYY-MM-DD'
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
 
     db = SessionLocal()
     try:
         q = db.query(Zeitbuchung)
-        # --- Фільтр періоду ---
         if start_date:
-            q = q.filter(Zeitbuchung.start_time >= datetime.strptime(start_date, "%Y-%m-%d"))
+            try:
+                q = q.filter(Zeitbuchung.start_time >= datetime.strptime(start_date, "%Y-%m-%d"))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid start_date format: {start_date}"}), 400
         if end_date:
-            # до кінця дня
-            q = q.filter(Zeitbuchung.start_time <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
-        # --- Фільтр юзера ---
+            try:
+                q = q.filter(Zeitbuchung.start_time <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid end_date format: {end_date}"}), 400
         if current_user.role.value == "Chef":
-            if user_id:
+            if user_id is not None and user_id != "":
                 q = q.filter(Zeitbuchung.user_id == user_id)
         else:
             q = q.filter(Zeitbuchung.user_id == current_user.id)
-        # --- Фільтр клієнта ---
         if client_id:
             q = q.filter(Zeitbuchung.client_id == client_id)
         q = q.order_by(Zeitbuchung.start_time.desc())
         result = []
         for s in q:
+            if not s.user or not s.client:
+                continue
             result.append({
                 "id": s.id,
                 "user_id": s.user.id,
@@ -339,9 +342,7 @@ def api_session_history():
 def api_nachbuchung():
     db = SessionLocal()
     try:
-        data = request.get_json(force=True)  # force=True щоб завжди парсив JSON
-
-        # 1. Визначаємо user_id
+        data = request.get_json(force=True)
         if current_user.role.value == "Chef":
             user_id_raw = data.get("user_id")
             if not user_id_raw or str(user_id_raw).strip() == "":
@@ -350,14 +351,12 @@ def api_nachbuchung():
                 user_id = int(user_id_raw)
             except Exception:
                 return jsonify({"success": False, "error": "Ungültige Mitarbeiter-ID!"}), 400
-            # Перевіряємо, що юзер існує та активний
             user = db.query(User).filter_by(id=user_id, active=True).first()
             if not user:
                 return jsonify({"success": False, "error": "Mitarbeiter existiert nicht!"}), 400
         else:
             user_id = current_user.id
 
-        # 2. client_id
         client_id_raw = data.get("client_id")
         if not client_id_raw or str(client_id_raw).strip() == "":
             return jsonify({"success": False, "error": "Kunde wählen!"}), 400
@@ -365,34 +364,26 @@ def api_nachbuchung():
             client_id = int(client_id_raw)
         except Exception:
             return jsonify({"success": False, "error": "Ungültige Kunden-ID!"}), 400
-        # перевіряємо, що клієнт існує та активний
         client = db.query(Client).filter_by(id=client_id, active=True).first()
         if not client:
             return jsonify({"success": False, "error": "Kunde existiert nicht!"}), 400
 
-        # 3. Дати/час
         start_time = data.get("start_time")
         end_time = data.get("end_time")
         comment = data.get("comment", "")
 
-        # 4. Перевірка обов'язкових полів
         if not all([user_id, client_id, start_time, end_time, comment.strip()]):
             return jsonify({"success": False, "error": "Alle Felder sind Pflichtfelder!"}), 400
 
-        # 5. Дата-час формат
         try:
             dt_start = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
             dt_end = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             return jsonify({"success": False, "error": "Ungültiges Datum/Zeit!"}), 400
 
-        # 6. Перевірка: чи кінець після початку
         if dt_start >= dt_end:
             return jsonify({"success": False, "error": "Beginn muss vor Ende liegen!"}), 400
 
-        # 7. (Опціонально) Чи не перетинається з іншими Buchungen? Тут можна додати перевірку, якщо потрібно
-
-        # 8. Створення записи
         zb = Zeitbuchung(
             user_id=user_id,
             client_id=client_id,
@@ -420,30 +411,23 @@ def api_edit_session(session_id):
         if current_user.role.value != "Chef":
             if zb.user_id != current_user.id:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
-            # Перевіряємо, що оригінальна сесія у поточному місяці
             if zb.start_time.month != now.month or zb.start_time.year != now.year:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
         data = request.get_json()
-        # --- Перевірка зміни місяця для User ---
         if current_user.role.value != "Chef":
-            # Який місяць дозволено
             allowed_month = now.month
             allowed_year = now.year
-            # старт
             new_start_time = zb.start_time
             if 'start_time' in data:
                 new_start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
-            # кінець (може бути порожнім)
             new_end_time = zb.end_time
             if 'end_time' in data:
                 if data['end_time']:
                     new_end_time = datetime.strptime(data['end_time'], "%Y-%m-%d %H:%M:%S")
                 else:
                     new_end_time = None
-            # Якщо змінюється місяць — заборонити
             if (new_start_time.month != allowed_month or new_start_time.year != allowed_year) or (new_end_time and (new_end_time.month != allowed_month or new_end_time.year != allowed_year)):
                 return jsonify({'success': False, 'error': 'Bearbeitungsfehler! Änderungen sind nur im Kalendermonat möglich!'}), 400
-        # --- Оновлення ---
         if 'client_id' in data:
             zb.client_id = int(data['client_id'])
         if 'start_time' in data:
@@ -477,10 +461,89 @@ def api_delete_session(session_id):
         db.delete(zb)
         db.commit()
         return jsonify({'success': True})
+    finally:
+        db.close()
 
+@app.route("/chef/statistik")
+@login_required
+def chef_statistik():
+    if not session.get("user_id") or session.get("user_role") != "Chef":
+        flash("Der Zugriff ist verweigert!", "danger")
+        return redirect(url_for("login"))
+    return render_template("statistik.html")
+
+@app.route('/api/statistik')
+@login_required
+def api_statistik():
+    if not session.get("user_id") or session.get("user_role") != "Chef":
+        return jsonify({"success": False, "error": "Zugriff verweigert"}), 403
+    year = request.args.get("year", type=int)
+    if not year:
+        year = datetime.now().year
+
+    db = SessionLocal()
+    try:
+        clients = db.query(Client).filter_by(active=True).order_by(Client.name).all()
+        client_ids = [c.id for c in clients]
+        client_names = {c.id: c.name for c in clients}
+
+        users = db.query(User).filter_by(active=True).order_by(User.last_name, User.first_name).all()
+        user_ids = [u.id for u in users]
+        user_names = {u.id: f"{u.first_name} {u.last_name}" for u in users}
+
+        main_chart = {}
+        for m in range(1, 13):
+            month_key = f"{year}-{m:02d}"
+            main_chart[month_key] = {}
+            for cid in client_ids:
+                main_chart[month_key][cid] = 0
+
+        start_dt = datetime(year, 1, 1)
+        end_dt = datetime(year, 12, 31, 23, 59, 59)
+        buchungen = db.query(Zeitbuchung).filter(
+            Zeitbuchung.start_time >= start_dt,
+            Zeitbuchung.start_time <= end_dt,
+            Zeitbuchung.client_id.in_(client_ids)
+        ).all()
+
+        for zb in buchungen:
+            if zb.end_time and zb.start_time:
+                hours = (zb.end_time - zb.start_time).total_seconds() / 3600
+                month_key = f"{zb.start_time.year}-{zb.start_time.month:02d}"
+                if zb.client_id in client_ids:
+                    main_chart[month_key][zb.client_id] += hours
+
+        popup_data = {}
+        for zb in buchungen:
+            if zb.end_time and zb.start_time:
+                hours = (zb.end_time - zb.start_time).total_seconds() / 3600
+                month_key = f"{zb.start_time.year}-{zb.start_time.month:02d}"
+                c_id = zb.client_id
+                u_id = zb.user_id
+                popup_data.setdefault(month_key, {})
+                popup_data[month_key].setdefault(c_id, {})
+                popup_data[month_key][c_id].setdefault(u_id, 0)
+                popup_data[month_key][c_id][u_id] += hours
+
+        monate_de = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Jun.", "Jul.", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."]
+
+        summary = {}
+        for m in range(1, 13):
+            month_key = f"{year}-{m:02d}"
+            summary[month_key] = sum(main_chart[month_key].values())
+
+        return jsonify({
+            "success": True,
+            "year": year,
+            "clients": [{"id": cid, "name": client_names[cid]} for cid in client_ids],
+            "users": [{"id": uid, "name": user_names[uid]} for uid in user_ids],
+            "months": monate_de,
+            "main_chart": main_chart,
+            "popup_data": popup_data,
+            "summary": summary,
+        })
     finally:
         db.close()
 
 if __name__ == "__main__":
     app.run(debug=True)
-

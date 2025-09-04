@@ -85,7 +85,13 @@
             min-width: 80px;
             text-align: center;
         }
-        
+        .logout-btn:disabled {
+    background: #e0e0e0 !important;
+    color: #888 !important;
+    border: 1px solid #bdbdbd !important;
+    cursor: not-allowed !important;
+    opacity: 0.65 !important;
+}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -109,9 +115,6 @@
 <div id="export-block" style="margin-left:30px; margin-bottom:32px; border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
     <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
     <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <select id="export-user" style="min-width:140px;">
-            <option value="">Alle Mitarbeiter</option>
-        </select>
         <select id="export-client" style="min-width:140px;">
             <option value="">Alle Kunden</option>
         </select>
@@ -351,15 +354,6 @@
     loadStatistik(currentYear);
 
 function fillExportSelects() {
-    fetch("/api/users")
-        .then(r => r.json())
-        .then(users => {
-            let sel = document.getElementById("export-user");
-            sel.innerHTML = '<option value="">Alle Mitarbeiter</option>';
-            for (let u of users) {
-                sel.innerHTML += `<option value="${u.id}">${u.name}</option>`;
-            }
-        });
     fetch("/api/clients")
         .then(r => r.json())
         .then(clients => {
@@ -375,7 +369,6 @@ fillExportSelects();
 function exportFormIsValid() {
     // Вибраний хоча б один фільтр
     return (
-        document.getElementById("export-user").value !== "" ||
         document.getElementById("export-client").value !== "" ||
         document.getElementById("export-start").value !== "" ||
         document.getElementById("export-end").value !== ""
@@ -388,7 +381,6 @@ const exportOK = document.getElementById("export-ok");
 const exportReset = document.getElementById("export-reset");
 const exportMsg = document.getElementById("export-msg");
 
-// За замовчуванням export disabled
 exportBtn.disabled = true;
 
 // Якщо змінюється будь-яке поле фільтру — Export неактивний, поки не натиснуто OK
@@ -411,7 +403,6 @@ exportOK.onclick = function() {
 };
 
 exportReset.onclick = function() {
-    document.getElementById("export-user").value = "";
     document.getElementById("export-client").value = "";
     document.getElementById("export-start").value = "";
     document.getElementById("export-end").value = "";
@@ -421,7 +412,6 @@ exportReset.onclick = function() {
 
 exportBtn.onclick = function() {
     if (exportBtn.disabled) return;
-    let user_id = document.getElementById("export-user").value;
     let client_id = document.getElementById("export-client").value;
     let start_date = document.getElementById("export-start").value;
     let end_date = document.getElementById("export-end").value;
@@ -431,7 +421,6 @@ exportBtn.onclick = function() {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
-            user_id: user_id,
             client_id: client_id,
             start_date: start_date,
             end_date: end_date
@@ -442,11 +431,10 @@ exportBtn.onclick = function() {
         return r.blob();
     })
     .then(blob => {
-        // Скачати файл
         let url = window.URL.createObjectURL(blob);
         let a = document.createElement('a');
         a.href = url;
-        a.download = "Sessions.xlsx";
+        a.download = getExportFileName();
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -456,6 +444,23 @@ exportBtn.onclick = function() {
         exportMsg.textContent = "Export fehlgeschlagen oder keine Daten!";
     });
 };
+
+function getExportFileName() {
+    let client = document.getElementById("export-client");
+    let start = document.getElementById("export-start").value;
+    let end = document.getElementById("export-end").value;
+
+    let clientText = client.value === "" ? "Alle_Kunde" : client.options[client.selectedIndex].text.replace(/\s+/g, "_");
+    let startText = start ? start.split("-").reverse().join(".") : "";
+    let endText = end ? end.split("-").reverse().join(".") : "";
+
+    let filename = clientText;
+    if (startText && endText) {
+        filename += "_" + startText + "_" + endText;
+    }
+    filename += ".xlsx";
+    return filename;
+}
     </script>
 </body>
 </html>

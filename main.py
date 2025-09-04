@@ -555,7 +555,6 @@ def api_export_sessions():
         return jsonify({"success": False, "error": "Zugriff verweigert"}), 403
 
     data = request.get_json(force=True)
-    user_id = data.get("user_id")
     client_id = data.get("client_id")
     start_date = data.get("start_date")
     end_date = data.get("end_date")
@@ -563,6 +562,7 @@ def api_export_sessions():
     db = SessionLocal()
     try:
         q = db.query(Zeitbuchung)
+        # Фільтр по датах
         if start_date:
             try:
                 q = q.filter(Zeitbuchung.start_time >= datetime.strptime(start_date, "%Y-%m-%d"))
@@ -573,8 +573,7 @@ def api_export_sessions():
                 q = q.filter(Zeitbuchung.start_time <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
             except Exception as e:
                 return jsonify({"success": False, "error": f"Invalid end_date format: {end_date}"}), 400
-        if user_id and str(user_id).strip() != "":
-            q = q.filter(Zeitbuchung.user_id == int(user_id))
+        # Фільтр по клієнту
         if client_id and str(client_id).strip() != "":
             q = q.filter(Zeitbuchung.client_id == int(client_id))
         q = q.order_by(Zeitbuchung.start_time.asc())
@@ -584,28 +583,81 @@ def api_export_sessions():
         ws = wb.active
         ws.title = "Sessions"
 
-        # Header
-        ws.append(["Name", "Vorname", "Arbeitsbeginn", "Arbeitende", "Kommentar", "Stunde"])
+        # Сірий фон для хедера
+        from openpyxl.styles import PatternFill, Font, Alignment
+
+        header_fill = PatternFill('solid', fgColor='F2F2F2')
+        gray_fill = PatternFill('solid', fgColor='F2F2F2')
+        bold_font = Font(bold=True)
+        right_align = Alignment(horizontal="right")
+        center_align = Alignment(horizontal="center")
+
+        # Хедер
+        headers = ["Datum", "Thema (Kommentar)", "Projekt (Kunde)", "Zeit (h)", "Netto (€)", "Brutto (€)"]
+        ws.append(headers)
+        for col in range(1, len(headers)+1):
+            ws.cell(row=1, column=col).fill = header_fill
+            ws.cell(row=1, column=col).font = bold_font
+            ws.cell(row=1, column=col).alignment = center_align
+
+        netto_rate = 100
+        brutto_rate = 119  # 100 + 19%
 
         total_hours = 0
-        for s in buchungen:
-            user = s.user
+        total_netto = 0
+        total_brutto = 0
+
+        for idx, s in enumerate(buchungen):
             client = s.client
-            if not user or not client or not s.start_time or not s.end_time:
+            if not client or not s.start_time or not s.end_time:
                 continue
             hours = round((s.end_time - s.start_time).total_seconds() / 3600, 1)
             total_hours += hours
-            ws.append([
-                user.last_name,
-                user.first_name,
-                s.start_time.strftime("%d.%m.%Y %H:%M"),
-                s.end_time.strftime("%d.%m.%Y %H:%M"),
-                s.comment or "",
-                hours
-            ])
+            netto = hours * netto_rate
+            brutto = hours * brutto_rate
+            total_netto += netto
+            total_brutto += brutto
+            row = [
+                s.start_time.strftime("%d.%m.%Y"),
+                s.comment if s.comment else "&&&",
+                client.name,
+                f"{hours:.1f}",
+                f"{netto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                f"{brutto:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            ]
+            ws.append(row)
+            excel_row = idx + 2  # 2, 3, ...
+            # Парні рядки: сірий фон
+            if excel_row % 2 == 0:
+                for col in range(1, len(headers)+1):
+                    ws.cell(row=excel_row, column=col).fill = gray_fill
+            # Вирівнювання для числових
+            ws.cell(row=excel_row, column=4).alignment = right_align
+            ws.cell(row=excel_row, column=5).alignment = right_align
+            ws.cell(row=excel_row, column=6).alignment = right_align
 
-        # Footer row with total
-        ws.append(["", "", "", "", "Gesamt", total_hours])
+        # Підсумковий рядок
+        sum_row = ["Summe", "", "", f"{total_hours:.1f}",
+                   f"{total_netto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                   f"{total_brutto:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")]
+        ws.append(sum_row)
+        last_row = ws.max_row
+        for col in range(1, len(headers)+1):
+            ws.cell(row=last_row, column=col).fill = gray_fill
+            ws.cell(row=last_row, column=col).font = bold_font
+            ws.cell(row=last_row, column=col).alignment = right_align if col >= 4 else center_align
+
+        # Автоматична ширина колонок
+        for col in ws.columns:
+            max_length = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = max_length + 2
 
         # Save to bytes
         bio = io.BytesIO()

@@ -7,6 +7,9 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 import calendar
+from flask import send_file
+import io
+from openpyxl import Workbook
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
@@ -545,5 +548,77 @@ def api_statistik():
     finally:
         db.close()
 
+@app.route('/api/export_sessions', methods=['POST'])
+@login_required
+def api_export_sessions():
+    if not session.get("user_id") or session.get("user_role") != "Chef":
+        return jsonify({"success": False, "error": "Zugriff verweigert"}), 403
+
+    data = request.get_json(force=True)
+    user_id = data.get("user_id")
+    client_id = data.get("client_id")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+
+    db = SessionLocal()
+    try:
+        q = db.query(Zeitbuchung)
+        if start_date:
+            try:
+                q = q.filter(Zeitbuchung.start_time >= datetime.strptime(start_date, "%Y-%m-%d"))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid start_date format: {start_date}"}), 400
+        if end_date:
+            try:
+                q = q.filter(Zeitbuchung.start_time <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid end_date format: {end_date}"}), 400
+        if user_id and str(user_id).strip() != "":
+            q = q.filter(Zeitbuchung.user_id == int(user_id))
+        if client_id and str(client_id).strip() != "":
+            q = q.filter(Zeitbuchung.client_id == int(client_id))
+        q = q.order_by(Zeitbuchung.start_time.asc())
+        buchungen = q.all()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sessions"
+
+        # Header
+        ws.append(["Name", "Vorname", "Arbeitsbeginn", "Arbeitende", "Kommentar", "Stunde"])
+
+        total_hours = 0
+        for s in buchungen:
+            user = s.user
+            client = s.client
+            if not user or not client or not s.start_time or not s.end_time:
+                continue
+            hours = round((s.end_time - s.start_time).total_seconds() / 3600, 1)
+            total_hours += hours
+            ws.append([
+                user.last_name,
+                user.first_name,
+                s.start_time.strftime("%d.%m.%Y %H:%M"),
+                s.end_time.strftime("%d.%m.%Y %H:%M"),
+                s.comment or "",
+                hours
+            ])
+
+        # Footer row with total
+        ws.append(["", "", "", "", "Gesamt", total_hours])
+
+        # Save to bytes
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return send_file(
+            bio,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name="Sessions.xlsx"
+        )
+    finally:
+        db.close()
+        
 if __name__ == "__main__":
     app.run(debug=True)

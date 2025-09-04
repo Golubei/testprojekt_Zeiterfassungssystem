@@ -85,6 +85,7 @@
             min-width: 80px;
             text-align: center;
         }
+        
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -105,7 +106,23 @@
         <canvas id="statistik-canvas"></canvas>
     </div>
     <div id="summary-block"></div>
-
+<div id="export-block" style="margin-left:30px; margin-bottom:32px; border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
+    <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
+    <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <select id="export-user" style="min-width:140px;">
+            <option value="">Alle Mitarbeiter</option>
+        </select>
+        <select id="export-client" style="min-width:140px;">
+            <option value="">Alle Kunden</option>
+        </select>
+        <label>Von <input type="date" id="export-start" style="min-width:120px;"></label>
+        <label>Bis <input type="date" id="export-end" style="min-width:120px;"></label>
+        <button type="button" id="export-ok" class="logout-btn">OK</button>
+        <button type="button" id="export-reset" class="logout-btn">Reset</button>
+        <button type="button" id="export-btn" class="logout-btn" disabled>Export</button>
+    </form>
+    <div id="export-msg" style="margin-top:8px;color:#c00;font-weight:bold;"></div>
+</div>
     <div id="popup-bg">
         <div id="popup-content">
             <button id="popup-close">✖</button>
@@ -332,6 +349,113 @@
     };
 
     loadStatistik(currentYear);
+
+function fillExportSelects() {
+    fetch("/api/users")
+        .then(r => r.json())
+        .then(users => {
+            let sel = document.getElementById("export-user");
+            sel.innerHTML = '<option value="">Alle Mitarbeiter</option>';
+            for (let u of users) {
+                sel.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+            }
+        });
+    fetch("/api/clients")
+        .then(r => r.json())
+        .then(clients => {
+            let sel = document.getElementById("export-client");
+            sel.innerHTML = '<option value="">Alle Kunden</option>';
+            for (let c of clients) {
+                sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            }
+        });
+}
+fillExportSelects();
+
+function exportFormIsValid() {
+    // Вибраний хоча б один фільтр
+    return (
+        document.getElementById("export-user").value !== "" ||
+        document.getElementById("export-client").value !== "" ||
+        document.getElementById("export-start").value !== "" ||
+        document.getElementById("export-end").value !== ""
+    );
+}
+
+const exportForm = document.getElementById("export-form");
+const exportBtn = document.getElementById("export-btn");
+const exportOK = document.getElementById("export-ok");
+const exportReset = document.getElementById("export-reset");
+const exportMsg = document.getElementById("export-msg");
+
+// За замовчуванням export disabled
+exportBtn.disabled = true;
+
+// Якщо змінюється будь-яке поле фільтру — Export неактивний, поки не натиснуто OK
+for (let el of exportForm.elements) {
+    if (el.tagName === "SELECT" || el.type === "date") {
+        el.addEventListener("change", function() {
+            exportBtn.disabled = true;
+        });
+    }
+}
+
+exportOK.onclick = function() {
+    if (!exportFormIsValid()) {
+        exportMsg.textContent = "Bitte mindestens ein Filter wählen!";
+        exportBtn.disabled = true;
+        return;
+    }
+    exportMsg.textContent = "";
+    exportBtn.disabled = false;
+};
+
+exportReset.onclick = function() {
+    document.getElementById("export-user").value = "";
+    document.getElementById("export-client").value = "";
+    document.getElementById("export-start").value = "";
+    document.getElementById("export-end").value = "";
+    exportMsg.textContent = "";
+    exportBtn.disabled = true;
+};
+
+exportBtn.onclick = function() {
+    if (exportBtn.disabled) return;
+    let user_id = document.getElementById("export-user").value;
+    let client_id = document.getElementById("export-client").value;
+    let start_date = document.getElementById("export-start").value;
+    let end_date = document.getElementById("export-end").value;
+    exportMsg.textContent = "";
+
+    fetch("/api/export_sessions", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            user_id: user_id,
+            client_id: client_id,
+            start_date: start_date,
+            end_date: end_date
+        })
+    })
+    .then(r => {
+        if (!r.ok) throw new Error("Export fehlgeschlagen");
+        return r.blob();
+    })
+    .then(blob => {
+        // Скачати файл
+        let url = window.URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.href = url;
+        a.download = "Sessions.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(e => {
+        exportMsg.textContent = "Export fehlgeschlagen oder keine Daten!";
+    });
+};
     </script>
 </body>
 </html>

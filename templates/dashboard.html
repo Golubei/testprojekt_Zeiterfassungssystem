@@ -71,21 +71,32 @@ button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 </head>
 <body>
     <h1>Willkommen in Dashboard</h1>
-    <div id="session-block"></div>
-   <div id="clock"></div>
-   <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 10px;">
-    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
-    <div id="password-change-ctrl" style="display: inline-block;">
-        <button class="main-btn" id="password-change-btn">Password ändern</button>
-        <span id="password-change-form" style="display:none;">
-            <input type="password" id="new-password" placeholder="Neues Passwort" style="margin-right:10px;">
-            <input type="password" id="repeat-password" placeholder="Passwort bestätigen" style="margin-right:10px;">
-            <button class="main-btn" id="password-ok-btn" disabled>Ok</button>
-            <button class="main-btn" id="password-reset-btn">Reset</button>
-        </span>
+
+    <!-- Блок Logout/Password ändern -->
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 10px;">
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        <div id="password-change-ctrl" style="display: inline-block;">
+            <button class="main-btn" id="password-change-btn">Password ändern</button>
+            <span id="password-change-form" style="display:none;">
+                <input type="password" id="new-password" placeholder="Neues Passwort" style="margin-right:10px;">
+                <input type="password" id="repeat-password" placeholder="Passwort bestätigen" style="margin-right:10px;">
+                <button class="main-btn" id="password-ok-btn" disabled>Ok</button>
+                <button class="main-btn" id="password-reset-btn">Reset</button>
+            </span>
+        </div>
     </div>
-</div>
-    <!-- Модальне вікно для коментаря -->
+
+    <!-- Годинник -->
+    <div id="clock"></div>
+
+    <!-- Сесія (Arbeitsbeginn/Arbeitende) над кнопкою "+" -->
+    <div id="session-block"></div>
+
+    <!-- Кнопка Nachbuchung "+" -->
+    <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
+    <div id="nachbuchung-row"></div>
+
+    <!-- Далі все інше як було -->
     <div id="comment-modal">
       <div class="modal-content">
         <label for="comment-input">Kommentar (Pflicht):</label><br>
@@ -95,8 +106,6 @@ button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
       </div>
     </div>
     <div id="buchungen-filter"></div>
-    <button class="main-btn" id="nachbuchung-btn" style="font-size:1.2em;margin-bottom:10px;">+</button>
-    <div id="nachbuchung-row"></div>
     <div id="period-filter" style="margin-bottom:16px;"></div>
     <div id="buchungen-table"></div>
     <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25);z-index:1001;">
@@ -106,6 +115,7 @@ button.main-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
         <button id="confirm-no" class="main-btn">Abbrechen</button>
       </div>
     </div>
+</body>
 <script>
 // --- Всі глобальні дані (тільки ОДИН РАЗ!) ---
 let activeSession = {{ active_session.id if active_session and active_session.id is not none else 'null' }};
@@ -177,6 +187,8 @@ function renderSessionBlock() {
                 }
             });
         };
+    } else {
+        sessionBlock.innerHTML = ''; // Нічого не показуємо якщо сесія завершена
     }
 }
 function showCommentModal() {

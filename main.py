@@ -402,6 +402,35 @@ def api_nachbuchung():
         print(traceback.format_exc())
         return jsonify({"success": False, "error": f"Interner Fehler: {str(e)}"}), 500
 
+@app.route("/api/change_password", methods=["POST"])
+@login_required
+def api_change_password():
+    db = SessionLocal()
+    try:
+        data = request.get_json(force=True)
+        new_password = data.get("password")
+        password2 = data.get("password2")
+
+        # Валідація
+        if not new_password or not password2:
+            return jsonify({"success": False, "error": "Alle Felder sind Pflichtfelder!"}), 400
+        if new_password != password2:
+            return jsonify({"success": False, "error": "Die Passwörter stimmen nicht überein!"}), 400
+        if len(new_password) < 6:
+            return jsonify({"success": False, "error": "Die Mindestlänge des Passworts beträgt 6 Zeichen!"}), 400
+
+        user = db.query(User).filter_by(id=current_user.id).first()
+        if not user:
+            return jsonify({"success": False, "error": "Benutzer nicht gefunden!"}), 404
+
+        user.hashed_password = generate_password_hash(new_password)
+        db.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
 @app.route('/api/session/<int:session_id>', methods=['PUT'])
 @login_required
 def api_edit_session(session_id):

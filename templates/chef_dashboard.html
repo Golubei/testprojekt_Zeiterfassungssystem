@@ -44,10 +44,19 @@
 <body>
     <h1>Hallo Chef!</h1>
     <div id="clock"></div>
-    <div style="margin-bottom: 10px;">
-        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
-        <a href="{{ url_for('chef_statistik') }}" class="logout-btn">Statistik</a>
+  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 10px;">
+    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    <a href="{{ url_for('chef_statistik') }}" class="logout-btn">Statistik</a>
+    <div id="password-change-ctrl" style="display: inline-block;">
+        <button class="main-btn" id="password-change-btn">Password ändern</button>
+        <span id="password-change-form" style="display:none;">
+            <input type="password" id="new-password" placeholder="Neues Passwort" style="margin-right:10px;">
+            <input type="password" id="repeat-password" placeholder="Passwort bestätigen" style="margin-right:10px;">
+            <button class="main-btn" id="password-ok-btn" disabled>Ok</button>
+            <button class="main-btn" id="password-reset-btn">Reset</button>
+        </span>
     </div>
+</div>
     <!-- --- Створення користувача --- -->
     <div class="form-block">
         <form method="post">
@@ -452,6 +461,60 @@
             }
         };
     }
+    // --- Password Change Logic ---
+const passwordBtn = document.getElementById('password-change-btn');
+const passwordForm = document.getElementById('password-change-form');
+const newPasswordInput = document.getElementById('new-password');
+const repeatPasswordInput = document.getElementById('repeat-password');
+const okBtn = document.getElementById('password-ok-btn');
+const resetBtn = document.getElementById('password-reset-btn');
+
+// Відкрити форму
+passwordBtn.onclick = function() {
+    passwordBtn.style.display = 'none';
+    passwordForm.style.display = 'block';
+    newPasswordInput.value = '';
+    repeatPasswordInput.value = '';
+    okBtn.disabled = true;
+};
+
+// Валідація
+function validatePasswordFields() {
+    const v1 = newPasswordInput.value;
+    const v2 = repeatPasswordInput.value;
+    okBtn.disabled = !(v1 && v2 && v1.length >= 6 && v1 === v2);
+}
+newPasswordInput.oninput = validatePasswordFields;
+repeatPasswordInput.oninput = validatePasswordFields;
+
+// Скасувати
+resetBtn.onclick = function() {
+    passwordForm.style.display = 'none';
+    passwordBtn.style.display = 'inline-block';
+};
+
+// Зберегти новий пароль
+okBtn.onclick = function() {
+    fetch('/api/change_password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            password: newPasswordInput.value,
+            password2: repeatPasswordInput.value
+        })
+    })
+    .then(r=>r.json())
+    .then(res=>{
+        if (res.success) {
+            alert("Passwort erfolgreich geändert!");
+            passwordForm.style.display = 'none';
+            passwordBtn.style.display = 'inline-block';
+        } else {
+            alert("Fehler: " + (res.error || ''));
+        }
+    })
+    .catch(e=>alert("Technischer Fehler: " + e));
+};
     </script>
 </body>
 </html>

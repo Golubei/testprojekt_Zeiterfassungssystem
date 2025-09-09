@@ -93,15 +93,17 @@
     </div>
     <table id="audit-table">
         <thead>
-            <tr>
-                <th>Datum/Uhrzeit</th>
-                <th>Aktion</th>
-                <th>User</th>
-                <th>Session-ID</th>
-                <th>Details</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
+    <tr>
+        <th>Datum/Uhrzeit</th>
+        <th>Aktion</th>
+        <th>User</th>
+        <th>Session-ID</th>
+        <th>Поле</th>
+        <th>Було</th>
+        <th>Стало</th>
+    </tr>
+</thead>
+<tbody></tbody>
     </table>
     <script>
         // Завантаження списку співробітників у select
@@ -165,47 +167,80 @@
         }
 
         // Основна функція завантаження аудиту
-        function loadAudit() {
-            let params = [];
-            let action = document.getElementById('filter-action').value;
-            let user = document.getElementById('filter-user').value;
-            let start = document.getElementById('filter-start').value;
-            let end = document.getElementById('filter-end').value;
-            if (action) params.push('action=' + encodeURIComponent(action));
-            if (user) params.push('user_id=' + encodeURIComponent(user));
-            if (start) params.push('start_date=' + encodeURIComponent(start));
-            if (end) params.push('end_date=' + encodeURIComponent(end));
-            let url = '/api/audit?' + params.join('&');
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    let tbody = document.querySelector('#audit-table tbody');
-                    tbody.innerHTML = '';
-                    if (data.success) {
-                        if (data.logs.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Keine Daten für gewählte Filter</td></tr>';
+function loadAudit() {
+    let params = [];
+    let action = document.getElementById('filter-action').value;
+    let user = document.getElementById('filter-user').value;
+    let start = document.getElementById('filter-start').value;
+    let end = document.getElementById('filter-end').value;
+    if (action) params.push('action=' + encodeURIComponent(action));
+    if (user) params.push('user_id=' + encodeURIComponent(user));
+    if (start) params.push('start_date=' + encodeURIComponent(start));
+    if (end) params.push('end_date=' + encodeURIComponent(end));
+    let url = '/api/audit?' + params.join('&');
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            let tbody = document.querySelector('#audit-table tbody');
+            tbody.innerHTML = '';
+            if (data.success) {
+                if (data.logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888;">Keine Daten für gewählte Filter</td></tr>';
+                }
+                for (let log of data.logs) {
+                    // Очікуємо, що log.details — це JSON з одним ключем (наприклад, comment)
+                    let field = '';
+                    let was = '';
+                    let became = '';
+                    if (typeof log.details === 'object') {
+                        for (let key in log.details) {
+                            if (log.details[key] && typeof log.details[key] === 'object'
+                                && 'old' in log.details[key] && 'new' in log.details[key]) {
+                                field = key;
+                                was = log.details[key].old;
+                                became = log.details[key].new;
+                                break;
+                            }
                         }
-                        for (let log of data.logs) {
-                            let detailsHtml = renderAuditDetails(log.details);
-                            let tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td>${log.timestamp}</td>
-                                <td>${log.action}</td>
-                                <td>${log.user}</td>
-                                <td>${log.session_id || ''}</td>
-                                <td>${detailsHtml}</td>
-                            `;
-                            tbody.appendChild(tr);
+                    } else if (typeof log.details === 'string') {
+                        try {
+                            let parsed = JSON.parse(log.details);
+                            for (let key in parsed) {
+                                if (parsed[key] && typeof parsed[key] === 'object'
+                                    && 'old' in parsed[key] && 'new' in parsed[key]) {
+                                    field = key;
+                                    was = parsed[key].old;
+                                    became = parsed[key].new;
+                                    break;
+                                }
+                            }
+                        } catch (e) {
+                            field = '';
+                            was = log.details;
+                            became = '';
                         }
-                    } else {
-                        tbody.innerHTML = '<tr><td colspan="5">Fehler: ' + (data.error || 'Unbekannt') + '</td></tr>';
                     }
-                })
-                .catch(e => {
-                    let tbody = document.querySelector('#audit-table tbody');
-                    tbody.innerHTML = '<tr><td colspan="5">Serverfehler!</td></tr>';
-                });
-        }
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${log.timestamp}</td>
+                        <td>${log.action}</td>
+                        <td>${log.user}</td>
+                        <td>${log.session_id || ''}</td>
+                        <td>${field}</td>
+                        <td>${was}</td>
+                        <td>${became}</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7">Fehler: ' + (data.error || 'Unbekannt') + '</td></tr>';
+            }
+        })
+        .catch(e => {
+            let tbody = document.querySelector('#audit-table tbody');
+            tbody.innerHTML = '<tr><td colspan="7">Serverfehler!</td></tr>';
+        });
+}
 
         window.onload = function() {
             fillUserSelect();

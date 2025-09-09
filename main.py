@@ -399,11 +399,34 @@ def api_nachbuchung():
         )
         db.add(zb)
         db.commit()
+
+        # --- Додаємо запис в AuditLog ---
+        audit_entry = AuditLog(
+            timestamp=datetime.now(),
+            user_id=current_user.id,
+            session_id=zb.id,
+            action="nachbuchung",
+            details=json.dumps({
+                "nachbuchung": {
+                    "user_id": user_id,
+                    "client_id": client_id,
+                    "start_time": str(dt_start),
+                    "end_time": str(dt_end),
+                    "comment": comment.strip()
+                }
+            }, ensure_ascii=False)
+        )
+        db.add(audit_entry)
+        db.commit()
+        # --- Кінець додавання ---
+
         return jsonify({"success": True})
     except Exception as e:
         import traceback
         print(traceback.format_exc())
         return jsonify({"success": False, "error": f"Interner Fehler: {str(e)}"}), 500
+    finally:
+        db.close()
 
 @app.route("/api/change_password", methods=["POST"])
 @login_required
@@ -538,6 +561,26 @@ def api_delete_session(session_id):
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
             if zb.start_time.month != now.month or zb.start_time.year != now.year:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+        
+        # --- ДОДАЙ ЦЕ ---
+        audit_entry = AuditLog(
+            timestamp=datetime.now(),
+            user_id=current_user.id,
+            session_id=session_id,
+            action="delete",
+            details=json.dumps({
+                "deleted_session": {
+                    "user_id": zb.user_id,
+                    "client_id": zb.client_id,
+                    "start_time": str(zb.start_time),
+                    "end_time": str(zb.end_time),
+                    "comment": zb.comment
+                }
+            }, ensure_ascii=False)
+        )
+        db.add(audit_entry)
+        # --- КІНЕЦЬ ДОДАВАННЯ ---
+
         db.delete(zb)
         db.commit()
         return jsonify({'success': True})

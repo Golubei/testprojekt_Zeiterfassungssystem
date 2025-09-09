@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Audit der Änderungen</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        h1 { font-size:2.2em; margin-bottom:20px; }
+        .filter-block {
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+        .filter-block label {
+            font-size: 1em;
+            margin-right: 12px;
+        }
+        .btn {
+            padding: 6px 18px;
+            border-radius:4px;
+            border:1px solid #bdbdbd;
+            background:#e0e0e0;
+            color: #222;
+            cursor:pointer;
+            font-size: 1em;
+            font-weight: normal;
+            margin-top:2px;
+            margin-right:4px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #cacaca; }
+        .btn:disabled { background: #ddd; color:#999; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 16px;
+            font-size: 1em;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th { background: #f0f0f0; }
+        tr:nth-child(even) td { background: #f7f7f7; }
+        pre { margin:0; font-size:0.98em; }
+        @media (max-width:900px) {
+            table, th, td { font-size: 0.95em; }
+            .filter-block { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Audit der Änderungen</h1>
+    <div style="margin-bottom:20px;">
+    <a href="/chef/statistik" class="btn">Zurück zur Statistik</a>
+</div>
+    <div class="filter-block">
+        <label>Aktion: 
+            <select id="filter-action">
+                <option value="">Alle</option>
+                <option value="edit">Bearbeitung</option>
+                <option value="delete">Löschen</option>
+                <option value="nachbuchung">Nachbuchung</option>
+            </select>
+        </label>
+        <label>User: 
+            <select id="filter-user">
+                <option value="">Alle</option>
+                <!-- Динамічно додаються співробітники -->
+            </select>
+        </label>
+        <label>Von: <input type="date" id="filter-start"></label>
+        <label>Bis: <input type="date" id="filter-end"></label>
+        <button class="btn" onclick="loadAudit()">Filtern</button>
+    </div>
+    <table id="audit-table">
+        <thead>
+            <tr>
+                <th>Datum/Uhrzeit</th>
+                <th>Aktion</th>
+                <th>User</th>
+                <th>Session-ID</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <script>
+        // Завантаження списку співробітників у select
+        function fillUserSelect() {
+            fetch("/api/users")
+                .then(r => r.json())
+                .then(users => {
+                    let sel = document.getElementById("filter-user");
+                    sel.innerHTML = '<option value="">Alle</option>';
+                    for (let u of users) {
+                        sel.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+                    }
+                });
+        }
+
+        // Встановити поточний місяць у фільтрі "Von" - "Bis"
+        function setDefaultDates() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const firstDay = `${year}-${month.toString().padStart(2, '0')}-01`;
+            const lastDayNum = new Date(year, month, 0).getDate();
+            const lastDay = `${year}-${month.toString().padStart(2, '0')}-${lastDayNum}`;
+            document.getElementById("filter-start").value = firstDay;
+            document.getElementById("filter-end").value = lastDay;
+        }
+
+        // Основна функція завантаження аудиту
+        function loadAudit() {
+            let params = [];
+            let action = document.getElementById('filter-action').value;
+            let user = document.getElementById('filter-user').value;
+            let start = document.getElementById('filter-start').value;
+            let end = document.getElementById('filter-end').value;
+            if (action) params.push('action=' + encodeURIComponent(action));
+            if (user) params.push('user_id=' + encodeURIComponent(user));
+            if (start) params.push('start_date=' + encodeURIComponent(start));
+            if (end) params.push('end_date=' + encodeURIComponent(end));
+            let url = '/api/audit?' + params.join('&');
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    let tbody = document.querySelector('#audit-table tbody');
+                    tbody.innerHTML = '';
+                    if (data.success) {
+                        if (data.logs.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Keine Daten für gewählte Filter</td></tr>';
+                        }
+                        for (let log of data.logs) {
+                            let detailsText = '';
+                            if (typeof log.details === 'object') {
+                                detailsText = JSON.stringify(log.details, null, 2);
+                            } else {
+                                detailsText = log.details;
+                            }
+                            let tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${log.timestamp}</td>
+                                <td>${log.action}</td>
+                                <td>${log.user}</td>
+                                <td>${log.session_id || ''}</td>
+                                <td><pre style="white-space:pre-wrap;">${detailsText}</pre></td>
+                            `;
+                            tbody.appendChild(tr);
+                        }
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5">Fehler: ' + (data.error || 'Unbekannt') + '</td></tr>';
+                    }
+                })
+                .catch(e => {
+                    let tbody = document.querySelector('#audit-table tbody');
+                    tbody.innerHTML = '<tr><td colspan="5">Serverfehler!</td></tr>';
+                });
+        }
+
+        window.onload = function() {
+            fillUserSelect();
+            setDefaultDates();
+            loadAudit();
+        };
+    </script>
+</body>
+</html>

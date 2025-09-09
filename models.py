@@ -1,12 +1,12 @@
 from datetime import datetime
+import calendar
 from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SqlEnum, ForeignKey
 )
 from sqlalchemy.orm import relationship
-from flask_login import UserMixin          # ДОДАТИ!
+from flask_login import UserMixin
 from db import Base
-import calendar
 
 class UserRole(Enum):
     User = "User"
@@ -53,3 +53,18 @@ class Zeitbuchung(Base):
 
     user = relationship("User", back_populates="zeitbuchungen")
     client = relationship("Client", back_populates="zeitbuchungen")
+
+class AuditActionEnum(str, Enum):
+    edit = "edit"
+    delete = "delete"
+    nachbuchung = "nachbuchung"
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    session_id = Column(Integer, ForeignKey("zeitbuchungen.id"), nullable=True)
+    action = Column(String(20))  # "edit", "delete", "nachbuchung"
+    details = Column(Text)       # JSON/dict-serialized old/new values
+    user = relationship("User")

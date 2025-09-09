@@ -112,19 +112,22 @@
         <canvas id="statistik-canvas"></canvas>
     </div>
     <div id="summary-block"></div>
-<div id="export-block" style="margin-left:30px; margin-bottom:32px; border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
-    <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
-    <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <select id="export-client" style="min-width:140px;">
-            <option value="">Alle Kunden</option>
-        </select>
-        <label>Von <input type="date" id="export-start" style="min-width:120px;"></label>
-        <label>Bis <input type="date" id="export-end" style="min-width:120px;"></label>
-        <button type="button" id="export-ok" class="logout-btn">OK</button>
-        <button type="button" id="export-reset" class="logout-btn">Reset</button>
-        <button type="button" id="export-btn" class="logout-btn" disabled>Export</button>
-    </form>
-    <div id="export-msg" style="margin-top:8px;color:#c00;font-weight:bold;"></div>
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-left:30px; margin-bottom:32px; max-width: 1000px;">
+    <div id="export-block" style="border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
+        <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
+        <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <select id="export-client" style="min-width:140px;">
+                <option value="">Alle Kunden</option>
+            </select>
+            <label>Von <input type="date" id="export-start" style="min-width:120px;"></label>
+            <label>Bis <input type="date" id="export-end" style="min-width:120px;"></label>
+            <button type="button" id="export-ok" class="logout-btn">OK</button>
+            <button type="button" id="export-reset" class="logout-btn">Reset</button>
+            <button type="button" id="export-btn" class="logout-btn" disabled>Export</button>
+        </form>
+        <div id="export-msg" style="margin-top:8px;color:#c00;font-weight:bold;"></div>
+    </div>
+    <a href="{{ url_for('audit') }}" class="logout-btn" style="height:40px; margin-top:16px; display:flex; align-items:center;">Änderungsaudit</a>
 </div>
     <div id="popup-bg">
         <div id="popup-content">

@@ -10,6 +10,9 @@ import calendar
 from flask import send_file
 import io
 from openpyxl import Workbook
+import json
+from models import AuditLog
+import traceback
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
@@ -431,6 +434,23 @@ def api_change_password():
     finally:
         db.close()
 
+def parse_dt(val):
+    """
+    Приймає рядок дати/часу та повертає datetime-об'єкт.
+    Дозволяє формати:
+      - "YYYY-MM-DD HH:MM:SS"
+      - "YYYY-MM-DD HH:MM"
+    Якщо формат не підходить — кидає ValueError.
+    """
+    if val:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                return datetime.strptime(val, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Ungültiges Datum/Zeit: {val}")
+    return None
+
 @app.route('/api/session/<int:session_id>', methods=['PUT'])
 @login_required
 def api_edit_session(session_id):
@@ -446,33 +466,47 @@ def api_edit_session(session_id):
             if zb.start_time.month != now.month or zb.start_time.year != now.year:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
         data = request.get_json()
-        if current_user.role.value != "Chef":
-            allowed_month = now.month
-            allowed_year = now.year
-            new_start_time = zb.start_time
-            if 'start_time' in data:
-                new_start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
-            new_end_time = zb.end_time
-            if 'end_time' in data:
-                if data['end_time']:
-                    new_end_time = datetime.strptime(data['end_time'], "%Y-%m-%d %H:%M:%S")
-                else:
-                    new_end_time = None
-            if (new_start_time.month != allowed_month or new_start_time.year != allowed_year) or (new_end_time and (new_end_time.month != allowed_month or new_end_time.year != allowed_year)):
-                return jsonify({'success': False, 'error': 'Bearbeitungsfehler! Änderungen sind nur im Kalendermonat möglich!'}), 400
-        if 'client_id' in data:
+        # Зберігаємо старі дані для аудиту
+        old_data = {
+            "client_id": zb.client_id,
+            "start_time": str(zb.start_time),
+            "end_time": str(zb.end_time),
+            "comment": zb.comment
+        }
+        changed_fields = []
+        if 'client_id' in data and zb.client_id != int(data['client_id']):
             zb.client_id = int(data['client_id'])
+            changed_fields.append('client_id')
         if 'start_time' in data:
-            zb.start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
+            new_start = parse_dt(data['start_time'])
+            if zb.start_time != new_start:
+                zb.start_time = new_start
+                changed_fields.append('start_time')
         if 'end_time' in data:
-            if data['end_time']:
-                zb.end_time = datetime.strptime(data['end_time'], "%Y-%m-%d %H:%M:%S")
-            else:
-                zb.end_time = None
-        if 'comment' in data:
+            new_end = parse_dt(data['end_time']) if data['end_time'] else None
+            if zb.end_time != new_end:
+                zb.end_time = new_end
+                changed_fields.append('end_time')
+        if 'comment' in data and zb.comment != data['comment']:
             zb.comment = data['comment']
+            changed_fields.append('comment')
         db.commit()
+        # Якщо були зміни — записати в audit_logs
+        if changed_fields:
+            details = f"Changed: {', '.join(changed_fields)}; old_data: {old_data}"
+            audit_entry = AuditLog(
+                timestamp=datetime.now(),
+                user_id=current_user.id,
+                session_id=session_id,
+                action="edit",
+                details=details
+            )
+            db.add(audit_entry)
+            db.commit()
         return jsonify({'success': True})
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         db.close()
 
@@ -700,6 +734,69 @@ def api_export_sessions():
         )
     finally:
         db.close()
+
+@app.route("/chef/audit")
+@login_required
+def audit():
+    if not session.get("user_id") or session.get("user_role") != "Chef":
+        flash("Der Zugriff ist verweigert!", "danger")
+        return redirect(url_for("login"))
+    return render_template("audit.html")
+
+@app.route('/api/audit')
+@login_required
+def api_audit():
+    if not session.get("user_id") or session.get("user_role") != "Chef":
+        return jsonify({"success": False, "error": "Zugriff verweigert"}), 403
+
+    action = request.args.get("action")
+    user_id = request.args.get("user_id", type=int)
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    db = SessionLocal()
+    try:
+        q = db.query(AuditLog)
+        if action:
+            q = q.filter(AuditLog.action == action)
+        if user_id:
+            q = q.filter(AuditLog.user_id == user_id)
+        if start_date:
+            try:
+                q = q.filter(AuditLog.timestamp >= datetime.strptime(start_date, "%Y-%m-%d"))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid start_date format: {start_date}"}), 400
+        if end_date:
+            try:
+                q = q.filter(AuditLog.timestamp <= datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Invalid end_date format: {end_date}"}), 400
+        q = q.order_by(AuditLog.timestamp.desc())
+        logs = q.all()
+        data = []
+        for log in logs:
+            details = log.details
+            try:
+                details = json.loads(log.details)
+            except Exception:
+                pass
+            user_obj = db.query(User).filter_by(id=log.user_id).first()
+            data.append({
+                "id": log.id,
+                "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "user": f"{user_obj.first_name} {user_obj.last_name}" if user_obj else "",
+                "action": log.action,
+                "session_id": log.session_id,
+                "details": details,
+            })
+        return jsonify({"success": True, "logs": data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+    finally:
+        db.close()
+
+@app.route("/test123")
+def test123():
+    return "OK!"
         
 if __name__ == "__main__":
     app.run(debug=True)

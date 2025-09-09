@@ -110,6 +110,46 @@
         </div>
     </div>
     <script>
+        // Перетворює "2025-09-09T08:44" на "2025-09-09 08:44:00"
+function formatDateForBackend(val) {
+    if (!val) return "";
+    // "T" → пробіл
+    val = val.replace("T", " ");
+    // Якщо вже є секунди
+    if (val.length === 19) return val;
+    // Якщо немає секунд, додаємо ":00"
+    if (val.length === 16) return val + ":00";
+    return val;
+}
+
+// Використання при формуванні PUT-запиту:
+function saveSession(sessionId) {
+    const data = {
+        client_id: document.getElementById('client_input').value,
+        start_time: formatDateForBackend(document.getElementById('start_input').value),
+        end_time: formatDateForBackend(document.getElementById('end_input').value),
+        comment: document.getElementById('comment_input').value
+    };
+
+    fetch(`/api/session/${sessionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.success) {
+            // Тут твоя логіка оновлення UI
+            alert("Збережено!");
+            location.reload();
+        } else {
+            alert("Помилка: " + (resp.error || "Невідома"));
+        }
+    })
+    .catch(e => {
+        alert("Серверна помилка!");
+    });
+}
     // --- Live Clock ---
     function pad(n) { return n < 10 ? "0" + n : n; }
     function updateClock() {

@@ -399,11 +399,34 @@ def api_nachbuchung():
         )
         db.add(zb)
         db.commit()
+
+        # --- Додаємо запис в AuditLog ---
+        audit_entry = AuditLog(
+            timestamp=datetime.now(),
+            user_id=current_user.id,
+            session_id=zb.id,
+            action="nachbuchung",
+            details=json.dumps({
+                "nachbuchung": {
+                    "user_id": user_id,
+                    "client_id": client_id,
+                    "start_time": str(dt_start),
+                    "end_time": str(dt_end),
+                    "comment": comment.strip()
+                }
+            }, ensure_ascii=False)
+        )
+        db.add(audit_entry)
+        db.commit()
+        # --- Кінець додавання ---
+
         return jsonify({"success": True})
     except Exception as e:
         import traceback
         print(traceback.format_exc())
         return jsonify({"success": False, "error": f"Interner Fehler: {str(e)}"}), 500
+    finally:
+        db.close()
 
 @app.route("/api/change_password", methods=["POST"])
 @login_required
@@ -465,35 +488,48 @@ def api_edit_session(session_id):
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
             if zb.start_time.month != now.month or zb.start_time.year != now.year:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+
         data = request.get_json()
-        # Зберігаємо старі дані для аудиту
-        old_data = {
-            "client_id": zb.client_id,
-            "start_time": str(zb.start_time),
-            "end_time": str(zb.end_time),
-            "comment": zb.comment
-        }
-        changed_fields = []
+        # Збираємо зміни для аудиту
+        changed_fields = {}
+
         if 'client_id' in data and zb.client_id != int(data['client_id']):
+            changed_fields['client_id'] = {
+                'old': zb.client_id,
+                'new': int(data['client_id'])
+            }
             zb.client_id = int(data['client_id'])
-            changed_fields.append('client_id')
+
         if 'start_time' in data:
             new_start = parse_dt(data['start_time'])
             if zb.start_time != new_start:
+                changed_fields['start_time'] = {
+                    'old': str(zb.start_time),
+                    'new': str(new_start)
+                }
                 zb.start_time = new_start
-                changed_fields.append('start_time')
+
         if 'end_time' in data:
             new_end = parse_dt(data['end_time']) if data['end_time'] else None
             if zb.end_time != new_end:
+                changed_fields['end_time'] = {
+                    'old': str(zb.end_time),
+                    'new': str(new_end)
+                }
                 zb.end_time = new_end
-                changed_fields.append('end_time')
+
         if 'comment' in data and zb.comment != data['comment']:
+            changed_fields['comment'] = {
+                'old': zb.comment,
+                'new': data['comment']
+            }
             zb.comment = data['comment']
-            changed_fields.append('comment')
+
         db.commit()
-        # Якщо були зміни — записати в audit_logs
+
+        # Якщо були зміни — записати в audit_logs (деталі у вигляді JSON)
         if changed_fields:
-            details = f"Changed: {', '.join(changed_fields)}; old_data: {old_data}"
+            details = json.dumps(changed_fields, ensure_ascii=False)
             audit_entry = AuditLog(
                 timestamp=datetime.now(),
                 user_id=current_user.id,
@@ -504,6 +540,7 @@ def api_edit_session(session_id):
             db.add(audit_entry)
             db.commit()
         return jsonify({'success': True})
+
     except Exception as e:
         import traceback
         return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
@@ -524,6 +561,26 @@ def api_delete_session(session_id):
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
             if zb.start_time.month != now.month or zb.start_time.year != now.year:
                 return jsonify({'success': False, 'error': 'Nicht erlaubt'}), 403
+        
+        # --- ДОДАЙ ЦЕ ---
+        audit_entry = AuditLog(
+            timestamp=datetime.now(),
+            user_id=current_user.id,
+            session_id=session_id,
+            action="delete",
+            details=json.dumps({
+                "deleted_session": {
+                    "user_id": zb.user_id,
+                    "client_id": zb.client_id,
+                    "start_time": str(zb.start_time),
+                    "end_time": str(zb.end_time),
+                    "comment": zb.comment
+                }
+            }, ensure_ascii=False)
+        )
+        db.add(audit_entry)
+        # --- КІНЕЦЬ ДОДАВАННЯ ---
+
         db.delete(zb)
         db.commit()
         return jsonify({'success': True})

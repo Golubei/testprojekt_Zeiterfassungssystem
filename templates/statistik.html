@@ -92,15 +92,6 @@
     cursor: not-allowed !important;
     opacity: 0.65 !important;
 }
-#audit-block table, #audit-block th, #audit-block td {
-        border: 1px solid #ccc;
-        padding: 8px;
-        text-align: left;
-        vertical-align: top;
-    }
-    #audit-block th { background: #f0f0f0; }
-    #audit-block tr:nth-child(even) td { background: #f7f7f7; }
-    .filter-block label { font-size: 1em; margin-right: 12px; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -121,66 +112,33 @@
         <canvas id="statistik-canvas"></canvas>
     </div>
     <div id="summary-block"></div>
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-left:30px; margin-bottom:32px; max-width: 1000px;">
-    <div id="export-block" style="border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
-        <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
-        <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-            <select id="export-client" style="min-width:140px;">
-                <option value="">Alle Kunden</option>
-            </select>
-            <label>Von <input type="date" id="export-start" style="min-width:120px;"></label>
-            <label>Bis <input type="date" id="export-end" style="min-width:120px;"></label>
-            <button type="button" id="export-ok" class="logout-btn">OK</button>
-            <button type="button" id="export-reset" class="logout-btn">Reset</button>
-            <button type="button" id="export-btn" class="logout-btn" disabled>Export</button>
-        </form>
-        <div id="export-msg" style="margin-top:8px;color:#c00;font-weight:bold;"></div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-left:30px; margin-bottom:32px; max-width: 1000px;">
+        <div id="export-block" style="border:1px solid #bbb; border-radius:8px; padding:16px 24px; max-width:700px;">
+            <h2 style="margin-top:0;font-size:1.3em;">Exportbereich</h2>
+            <form id="export-form" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <select id="export-client" style="min-width:140px;">
+                    <option value="">Alle Kunden</option>
+                </select>
+                <label>Von <input type="date" id="export-start" style="min-width:120px;"></label>
+                <label>Bis <input type="date" id="export-end" style="min-width:120px;"></label>
+                <button type="button" id="export-ok" class="logout-btn">OK</button>
+                <button type="button" id="export-reset" class="logout-btn">Reset</button>
+                <button type="button" id="export-btn" class="logout-btn" disabled>Export</button>
+            </form>
+            <div id="export-msg" style="margin-top:8px;color:#c00;font-weight:bold;"></div>
+        </div>
     </div>
-</div>
-<!-- Блок кнопки для розгортання аудиту -->
-<div id="audit-toggle-row" style="display: flex; align-items: center; margin-left:30px; margin-bottom:12px; gap:12px; max-width:1000px;">
-    <span style="font-weight: bold; font-size: 1.15em;">Änderungenaudit</span>
-    <button id="audit-toggle-btn" class="logout-btn" style="width:40px; height:40px; font-size:1.6em; display:inline-flex; align-items:center; justify-content:center;">+</button>
-</div>
-<!-- Сам блок аудиту -->
-<div id="audit-block" style="display:none; margin-left:30px; max-width:1000px;">
-    <h2 style="margin-top:0;">Audit der Änderungen</h2>
-    <div style="margin-bottom:20px;">
+
+    <!-- Popup for employee hours by month/client -->
+    <div id="popup-bg" style="display:none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.20); z-index: 9999;">
+      <div id="popup-content" style="background: #fff; min-width: 340px; max-width: 480px; margin: 10vh auto; padding: 28px 28px 16px 28px; border-radius: 8px; box-shadow: 0 2px 16px #2225; position: relative;">
+        <button id="popup-close" style="position: absolute; top: 9px; right: 12px; font-size: 1.3em; cursor: pointer; background: none; border: none; color: #444;">X</button>
+        <div id="popup-title"></div>
+        <canvas id="popup-chart-canvas" width="400" height="260"></canvas>
+      </div>
     </div>
-    <div class="filter-block" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;">
-        <label>Aktion: 
-            <select id="filter-action">
-                <option value="">Alle</option>
-                <option value="edit">Bearbeitung</option>
-                <option value="delete">Löschen</option>
-                <option value="nachbuchung">Nachbuchung</option>
-            </select>
-        </label>
-        <label>User: 
-            <select id="filter-user">
-                <option value="">Alle</option>
-            </select>
-        </label>
-        <label>Von: <input type="date" id="filter-start"></label>
-        <label>Bis: <input type="date" id="filter-end"></label>
-        <button class="logout-btn" id="audit-filter-btn">Filtern</button>
-        <button class="logout-btn" id="audit-reset-btn">Reset</button>
-    </div>
-    <table id="audit-table" style="border-collapse:collapse;width:100%;margin-top:16px;font-size:1em;">
-        <thead>
-            <tr>
-                <th>Datum/Uhrzeit</th>
-                <th>Aktion</th>
-                <th>User</th>
-                <th>Session-ID</th>
-                <th>Feld</th>
-                <th>War</th>
-                <th>Jetzt</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
     // --- Live Clock ---
     function pad(n) { return n < 10 ? "0" + n : n; }
@@ -304,6 +262,7 @@
         });
     }
 
+    // --- Chart bar click handler for popup ---
     document.getElementById('statistik-canvas').onclick = function(evt) {
         if (!statistikChart) return;
         const points = statistikChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
@@ -322,6 +281,11 @@
         let popup = document.getElementById('popup-bg');
         let popupTitle = document.getElementById('popup-title');
         let popupCanvas = document.getElementById('popup-chart-canvas');
+        // Defensive: check if canvas exists
+        if (!popupCanvas) {
+            alert("Помилка: немає елемента canvas для попапу!");
+            return;
+        }
         popupCanvas.width = 400;
         popupCanvas.height = 260;
 
@@ -401,249 +365,115 @@
 
     loadStatistik(currentYear);
 
-function fillExportSelects() {
-    fetch("/api/clients")
-        .then(r => r.json())
-        .then(clients => {
-            let sel = document.getElementById("export-client");
-            sel.innerHTML = '<option value="">Alle Kunden</option>';
-            for (let c of clients) {
-                sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-            }
-        });
-}
-fillExportSelects();
-
-function exportFormIsValid() {
-    // Вибраний хоча б один фільтр
-    return (
-        document.getElementById("export-client").value !== "" ||
-        document.getElementById("export-start").value !== "" ||
-        document.getElementById("export-end").value !== ""
-    );
-}
-
-const exportForm = document.getElementById("export-form");
-const exportBtn = document.getElementById("export-btn");
-const exportOK = document.getElementById("export-ok");
-const exportReset = document.getElementById("export-reset");
-const exportMsg = document.getElementById("export-msg");
-
-exportBtn.disabled = true;
-
-// Якщо змінюється будь-яке поле фільтру — Export неактивний, поки не натиснуто OK
-for (let el of exportForm.elements) {
-    if (el.tagName === "SELECT" || el.type === "date") {
-        el.addEventListener("change", function() {
-            exportBtn.disabled = true;
-        });
+    // --- Export logic remains unchanged ---
+    function fillExportSelects() {
+        fetch("/api/clients")
+            .then(r => r.json())
+            .then(clients => {
+                let sel = document.getElementById("export-client");
+                sel.innerHTML = '<option value="">Alle Kunden</option>';
+                for (let c of clients) {
+                    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                }
+            });
     }
-}
+    fillExportSelects();
 
-exportOK.onclick = function() {
-    if (!exportFormIsValid()) {
-        exportMsg.textContent = "Bitte mindestens ein Filter wählen!";
-        exportBtn.disabled = true;
-        return;
+    function exportFormIsValid() {
+        // Вибраний хоча б один фільтр
+        return (
+            document.getElementById("export-client").value !== "" ||
+            document.getElementById("export-start").value !== "" ||
+            document.getElementById("export-end").value !== ""
+        );
     }
-    exportMsg.textContent = "";
-    exportBtn.disabled = false;
-};
 
-exportReset.onclick = function() {
-    document.getElementById("export-client").value = "";
-    document.getElementById("export-start").value = "";
-    document.getElementById("export-end").value = "";
-    exportMsg.textContent = "";
+    const exportForm = document.getElementById("export-form");
+    const exportBtn = document.getElementById("export-btn");
+    const exportOK = document.getElementById("export-ok");
+    const exportReset = document.getElementById("export-reset");
+    const exportMsg = document.getElementById("export-msg");
+
     exportBtn.disabled = true;
-};
 
-exportBtn.onclick = function() {
-    if (exportBtn.disabled) return;
-    let client_id = document.getElementById("export-client").value;
-    let start_date = document.getElementById("export-start").value;
-    let end_date = document.getElementById("export-end").value;
-    exportMsg.textContent = "";
+    // Якщо змінюється будь-яке поле фільтру — Export неактивний, поки не натиснуто OK
+    for (let el of exportForm.elements) {
+        if (el.tagName === "SELECT" || el.type === "date") {
+            el.addEventListener("change", function() {
+                exportBtn.disabled = true;
+            });
+        }
+    }
 
-    fetch("/api/export_sessions", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            client_id: client_id,
-            start_date: start_date,
-            end_date: end_date
+    exportOK.onclick = function() {
+        if (!exportFormIsValid()) {
+            exportMsg.textContent = "Bitte mindestens ein Filter wählen!";
+            exportBtn.disabled = true;
+            return;
+        }
+        exportMsg.textContent = "";
+        exportBtn.disabled = false;
+    };
+
+    exportReset.onclick = function() {
+        document.getElementById("export-client").value = "";
+        document.getElementById("export-start").value = "";
+        document.getElementById("export-end").value = "";
+        exportMsg.textContent = "";
+        exportBtn.disabled = true;
+    };
+
+    exportBtn.onclick = function() {
+        if (exportBtn.disabled) return;
+        let client_id = document.getElementById("export-client").value;
+        let start_date = document.getElementById("export-start").value;
+        let end_date = document.getElementById("export-end").value;
+        exportMsg.textContent = "";
+
+        fetch("/api/export_sessions", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                client_id: client_id,
+                start_date: start_date,
+                end_date: end_date
+            })
         })
-    })
-    .then(r => {
-        if (!r.ok) throw new Error("Export fehlgeschlagen");
-        return r.blob();
-    })
-    .then(blob => {
-        let url = window.URL.createObjectURL(blob);
-        let a = document.createElement('a');
-        a.href = url;
-        a.download = getExportFileName();
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(e => {
-        exportMsg.textContent = "Export fehlgeschlagen oder keine Daten!";
-    });
-};
-
-function getExportFileName() {
-    let client = document.getElementById("export-client");
-    let start = document.getElementById("export-start").value;
-    let end = document.getElementById("export-end").value;
-
-    let clientText = client.value === "" ? "Alle_Kunde" : client.options[client.selectedIndex].text.replace(/\s+/g, "_");
-    let startText = start ? start.split("-").reverse().join(".") : "";
-    let endText = end ? end.split("-").reverse().join(".") : "";
-
-    let filename = clientText;
-    if (startText && endText) {
-        filename += "_" + startText + "_" + endText;
-    }
-    filename += ".xlsx";
-    return filename;
-}
-// --- КНОПКА "+" / "-" для аудиту ---
-const auditToggleBtn = document.getElementById('audit-toggle-btn');
-const auditBlock = document.getElementById('audit-block');
-auditToggleBtn.onclick = function() {
-    if (auditBlock.style.display === 'none') {
-        auditBlock.style.display = '';
-        auditToggleBtn.textContent = '−';
-        // Після відкриття одразу ініціалізуємо фільтри і таблицю
-        fillUserSelect();
-        setDefaultDates();
-        loadAudit();
-    } else {
-        auditBlock.style.display = 'none';
-        auditToggleBtn.textContent = '+';
-    }
-};
-
-// --- JS для самого аудиту ---
-function fillUserSelect() {
-    fetch("/api/users")
-        .then(r => r.json())
-        .then(users => {
-            let sel = document.getElementById("filter-user");
-            sel.innerHTML = '<option value="">Alle</option>';
-            for (let u of users) {
-                sel.innerHTML += `<option value="${u.id}">${u.name}</option>`;
-            }
-        });
-}
-
-function setDefaultDates() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const firstDay = `${year}-${month.toString().padStart(2, '0')}-01`;
-    const lastDayNum = new Date(year, month, 0).getDate();
-    const lastDay = `${year}-${month.toString().padStart(2, '0')}-${lastDayNum}`;
-    document.getElementById("filter-start").value = firstDay;
-    document.getElementById("filter-end").value = lastDay;
-}
-
-function loadAudit() {
-    let params = [];
-    let action = document.getElementById('filter-action').value;
-    let user = document.getElementById('filter-user').value;
-    let start = document.getElementById('filter-start').value;
-    let end = document.getElementById('filter-end').value;
-    if (action) params.push('action=' + encodeURIComponent(action));
-    if (user) params.push('user_id=' + encodeURIComponent(user));
-    if (start) params.push('start_date=' + encodeURIComponent(start));
-    if (end) params.push('end_date=' + encodeURIComponent(end));
-    let url = '/api/audit?' + params.join('&');
-    fetch(url)
-        .then(r => r.json())
-        .then(data => {
-            let tbody = document.querySelector('#audit-table tbody');
-            tbody.innerHTML = '';
-            if (data.success) {
-                if (!data.logs || data.logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888;">Keine Daten für gewählte Filter</td></tr>';
-                }
-                for (let log of data.logs) {
-                    // Очікуємо, що log.details — це JSON з одним ключем (наприклад, comment)
-                    let field = '', was = '', became = '';
-                    if (typeof log.details === 'object') {
-                        for (let key in log.details) {
-                            if (log.details[key] && typeof log.details[key] === 'object'
-                                && 'old' in log.details[key] && 'new' in log.details[key]) {
-                                field = key;
-                                was = log.details[key].old;
-                                became = log.details[key].new;
-                                break;
-                            }
-                        }
-                    } else if (typeof log.details === 'string') {
-                        try {
-                            let parsed = JSON.parse(log.details);
-                            for (let key in parsed) {
-                                if (parsed[key] && typeof parsed[key] === 'object'
-                                    && 'old' in parsed[key] && 'new' in parsed[key]) {
-                                    field = key;
-                                    was = parsed[key].old;
-                                    became = parsed[key].new;
-                                    break;
-                                }
-                            }
-                        } catch (e) {
-                            field = '';
-                            was = log.details;
-                            became = '';
-                        }
-                    }
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${log.timestamp}</td>
-                        <td>${log.action}</td>
-                        <td>${log.user}</td>
-                        <td>${log.session_id || ''}</td>
-                        <td>${field}</td>
-                        <td>${was}</td>
-                        <td>${became}</td>
-                    `;
-                    tbody.appendChild(tr);
-                }
-            } else {
-                tbody.innerHTML = '<tr><td colspan="7">Fehler: ' + (data.error || 'Unbekannt') + '</td></tr>';
-            }
+        .then(r => {
+            if (!r.ok) throw new Error("Export fehlgeschlagen");
+            return r.blob();
+        })
+        .then(blob => {
+            let url = window.URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = getExportFileName();
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
         })
         .catch(e => {
-            let tbody = document.querySelector('#audit-table tbody');
-            tbody.innerHTML = '<tr><td colspan="7">Serverfehler!</td></tr>';
+            exportMsg.textContent = "Export fehlgeschlagen oder keine Daten!";
         });
-}
+    };
 
-// --- Фільтр "Filtern" ---
-document.addEventListener("DOMContentLoaded", function() {
-    const filterBtn = document.getElementById('audit-filter-btn');
-    if (filterBtn) {
-        filterBtn.onclick = function() {
-            loadAudit();
-        };
-    }
+    function getExportFileName() {
+        let client = document.getElementById("export-client");
+        let start = document.getElementById("export-start").value;
+        let end = document.getElementById("export-end").value;
 
-    // --- Додаємо Reset для аудиту ---
-    const auditResetBtn = document.getElementById('audit-reset-btn');
-    if (auditResetBtn) {
-        auditResetBtn.onclick = function() {
-            // Скидаємо всі фільтри до дефолтних
-            document.getElementById('filter-action').value = "";
-            document.getElementById('filter-user').value = "";
-            setDefaultDates(); // функція вже є у твоєму коді
-            loadAudit();       // перезавантажуємо таблицю
-        };
+        let clientText = client.value === "" ? "Alle_Kunde" : client.options[client.selectedIndex].text.replace(/\s+/g, "_");
+        let startText = start ? start.split("-").reverse().join(".") : "";
+        let endText = end ? end.split("-").reverse().join(".") : "";
+
+        let filename = clientText;
+        if (startText && endText) {
+            filename += "_" + startText + "_" + endText;
+        }
+        filename += ".xlsx";
+        return filename;
     }
-});
     </script>
 </body>
 </html>

@@ -5,6 +5,12 @@ enum UserRole {
     Chef
 }
 
+enum AuditActionEnum {
+    edit
+    delete
+    nachbuchung
+}
+
 entity "User" as User {
     id : Integer
     email : String
@@ -36,8 +42,19 @@ entity "Zeitbuchung" as Zeitbuchung {
     updated_at : DateTime
 }
 
+entity "AuditLog" as AuditLog {
+    id : Integer
+    timestamp : DateTime
+    user_id : Integer
+    session_id : Integer
+    action : AuditActionEnum (String)
+    details : Text
+}
+
 UserRole -- User : role
 User ||--o{ Zeitbuchung : ""
 Client ||--o{ Zeitbuchung : ""
+User ||--o{ AuditLog : ""
+Zeitbuchung ||--o{ AuditLog : session_id
 
 @enduml

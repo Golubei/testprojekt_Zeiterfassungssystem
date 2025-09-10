@@ -164,6 +164,7 @@
         <label>Von: <input type="date" id="filter-start"></label>
         <label>Bis: <input type="date" id="filter-end"></label>
         <button class="logout-btn" id="audit-filter-btn">Filtern</button>
+        <button class="logout-btn" id="audit-reset-btn">Reset</button>
     </div>
     <table id="audit-table" style="border-collapse:collapse;width:100%;margin-top:16px;font-size:1em;">
         <thead>
@@ -628,6 +629,18 @@ document.addEventListener("DOMContentLoaded", function() {
     if (filterBtn) {
         filterBtn.onclick = function() {
             loadAudit();
+        };
+    }
+
+    // --- Додаємо Reset для аудиту ---
+    const auditResetBtn = document.getElementById('audit-reset-btn');
+    if (auditResetBtn) {
+        auditResetBtn.onclick = function() {
+            // Скидаємо всі фільтри до дефолтних
+            document.getElementById('filter-action').value = "";
+            document.getElementById('filter-user').value = "";
+            setDefaultDates(); // функція вже є у твоєму коді
+            loadAudit();       // перезавантажуємо таблицю
         };
     }
 });

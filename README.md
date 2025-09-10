@@ -1,6 +1,7 @@
 # Zeiterfassungssystem
 
-<img width="1888" height="495" alt="image" src="https://github.com/user-attachments/assets/f12bf80b-a663-4a75-b5cf-ec795e88074d" />
+<img width="1084" height="513" alt="image" src="https://github.com/user-attachments/assets/811d165c-f063-4ee3-860b-9cba63b5c431" />
+
 
 
 **Zeiterfassungssystem** is a simple web application for time tracking, statistics, export, and audit of changes.

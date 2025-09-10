@@ -24,9 +24,15 @@
 
 | Main Dashboard | Audit Log | Export Section |
 | :---: | :---: | :---: |
-| ![Main Dashboard](screenshots/dashboard.png) | ![Audit Log](screenshots/audit.png) | ![Export Section](screenshots/export.png) |
-<img width="452" height="459" alt="image" src="https://github.com/user-attachments/assets/07562280-1f4f-409d-996a-a694f74fed6c" />
-<img width="1884" height="973" alt="image" src="https://github.com/user-attachments/assets/890a7c9e-e41b-4ab7-a33d-e6133b71edc2" />
+<img width="1891" height="974" alt="image" src="https://github.com/user-attachments/assets/8277d160-cc8e-45a5-8997-8303a9bd544f" />
+<img width="1887" height="958" alt="image" src="https://github.com/user-attachments/assets/c6b21907-1b8e-4305-8036-67b339b60e1c" />
+<img width="1888" height="591" alt="image" src="https://github.com/user-attachments/assets/910545a6-670e-426e-94df-74cb67ecb89a" />
+<img width="1863" height="977" alt="image" src="https://github.com/user-attachments/assets/5a96a7c1-7a75-4e18-914b-4159c03b58d5" />
+<img width="1838" height="953" alt="image" src="https://github.com/user-attachments/assets/2c801f3a-0fdd-44e3-99e2-80923c710366" />
+<img width="1859" height="699" alt="image" src="https://github.com/user-attachments/assets/24f1990b-cccb-49ce-abd4-ee61ea566ba9" />
+<img width="690" height="589" alt="image" src="https://github.com/user-attachments/assets/cbec1c6c-9854-48de-af39-6240b8370ee6" />
+
+
 
 ---
 

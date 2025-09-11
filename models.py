@@ -1,5 +1,4 @@
 from datetime import datetime
-import calendar
 from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SqlEnum, ForeignKey
@@ -12,23 +11,23 @@ class UserRole(Enum):
     User = "User"
     Chef = "Chef"
 
-class User(Base, UserMixin):               # ДОДАТИ UserMixin!
+class User(Base, UserMixin):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(SqlEnum(UserRole), nullable=False)
-    first_name = Column(String, nullable=False)     # Ім'я
-    last_name = Column(String, nullable=False)      # Прізвище
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     zeitbuchungen = relationship("Zeitbuchung", back_populates="user")
 
-    # ДОДАТИ, якщо хочеш явну реалізацію (але UserMixin вже це має):
-    def get_id(self):
-        return str(self.id)
+    @property
+    def is_active(self):
+        return self.active
 
 class Client(Base):
     __tablename__ = "clients"
@@ -39,6 +38,10 @@ class Client(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     zeitbuchungen = relationship("Zeitbuchung", back_populates="client")
+
+    @property
+    def is_active(self):
+        return self.active
 
 class Zeitbuchung(Base):
     __tablename__ = "zeitbuchungen"
@@ -53,6 +56,7 @@ class Zeitbuchung(Base):
 
     user = relationship("User", back_populates="zeitbuchungen")
     client = relationship("Client", back_populates="zeitbuchungen")
+    # audit_logs = relationship("AuditLog", back_populates="session")  # optionally
 
 class AuditActionEnum(str, Enum):
     edit = "edit"
@@ -65,6 +69,7 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     user_id = Column(Integer, ForeignKey("users.id"))
     session_id = Column(Integer, ForeignKey("zeitbuchungen.id"), nullable=True)
-    action = Column(String(20))  # "edit", "delete", "nachbuchung"
-    details = Column(Text)       # JSON/dict-serialized old/new values
+    action = Column(String(20))
+    details = Column(Text)
     user = relationship("User")
+    # session = relationship("Zeitbuchung")  # optionally

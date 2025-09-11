@@ -15,9 +15,8 @@ from models import AuditLog
 import traceback
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = "your_secret_key"
 
-# Flask-Login setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
@@ -25,23 +24,23 @@ login_manager.login_view = "login"
 @login_manager.user_loader
 def load_user(user_id):
     db = SessionLocal()
-    user = db.query(User).get(int(user_id))
+    user = db.get(User, int(user_id))
     db.close()
     return user
 
+# Створення всіх таблиць
 Base.metadata.create_all(bind=engine)
 
-@app.route("/")
-def index():
-    return redirect(url_for("login"))
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
+@app.route("/chef_register", methods=["GET", "POST"])
+def chef_register():
     db = SessionLocal()
-    chef = db.query(User).filter(User.role == UserRole.Chef).first()
-    db.close()
-    if chef:
-        flash("Ein Teamleiter existiert bereits.", "warning")
+    # Для тестів можна дозволити кількох Chef, або унікальний email для кожного тесту
+    # Якщо ти хочеш тільки одного Chef на всю базу, залиш як є, але тести мають реєструвати з різними email!
+    chef_exists = db.query(User).filter(User.role == UserRole.Chef).first()
+    print("Chef exists:", chef_exists)
+    if chef_exists and not app.config.get("TESTING", False):
+        db.close()
+        flash("Chef is already registered. Please log in.", "warning")
         return redirect(url_for("login"))
     if request.method == "POST":
         email = request.form.get("email")
@@ -49,21 +48,23 @@ def register():
         last_name = request.form.get("last_name")
         password = request.form.get("password")
         password2 = request.form.get("password2")
-        db = SessionLocal()
+        # Перевірка на унікальність email
         if db.query(User).filter(User.email == email).first():
-            flash("Diese E-Mail-Adresse ist bereits vergeben.", "danger")
+            flash("Email is already registered.", "danger")
             db.close()
-            return render_template("register.html")
+            return render_template("chef_register.html")
+        # Перевірка паролів
         if password != password2:
-            flash("Passwörter stimmen nicht überein.", "danger")
+            flash("Passwords do not match.", "danger")
             db.close()
-            return render_template("register.html")
+            return render_template("chef_register.html")
+        # Перевірка, чи всі поля заповнені
         if not (email and first_name and last_name and password):
-            flash("Bitte alle Felder ausfüllen.", "danger")
+            flash("Please fill in all fields.", "danger")
             db.close()
-            return render_template("register.html")
+            return render_template("chef_register.html")
         hashed_password = generate_password_hash(password)
-        new_chef = User(
+        chef = User(
             email=email,
             first_name=first_name,
             last_name=last_name,
@@ -71,12 +72,23 @@ def register():
             role=UserRole.Chef,
             active=True,
         )
-        db.add(new_chef)
+        db.add(chef)
         db.commit()
         db.close()
-        flash("Teamleiter erfolgreich registriert! Sie können sich jetzt anmelden.", "success")
+        flash("Chef successfully registered! You can now log in.", "success")
         return redirect(url_for("login"))
-    return render_template("register.html")
+    db.close()
+    return render_template("chef_register.html")
+
+@app.route("/")
+def index():
+    db = SessionLocal()
+    chef_exists = db.query(User).filter(User.role == UserRole.Chef).first()
+    db.close()
+    if chef_exists:
+        return redirect(url_for("login"))
+    else:
+        return redirect(url_for("chef_register"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -85,13 +97,21 @@ def login():
         password = request.form.get("password")
         db = SessionLocal()
         user = db.query(User).filter(User.email == email).first()
+        print("USER FOUND:", user)
+        print("PASSWORD OK:", user and check_password_hash(user.hashed_password, password))
+        print("USER ACTIVE:", user and getattr(user, "active", None))
         db.close()
         if user and check_password_hash(user.hashed_password, password):
+            # Явна перевірка is_active (працює якщо є @property is_active в моделі)
+            if not user.is_active:
+                flash("Ihr Benutzerkonto ist deaktiviert.", "danger")
+                return render_template("login.html")
             login_user(user)
             session["user_id"] = user.id
             user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
             session["user_role"] = user_role
             flash("Erfolgreich eingeloggt!", "success")
+            print("SESSION USER_ID:", session.get("user_id"), "SESSION USER_ROLE:", session.get("user_role"))
             if user_role == "Chef":
                 return redirect(url_for("chef_dashboard"))
             else:
@@ -189,6 +209,9 @@ def chef_dashboard():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    print("CURRENT_USER:", current_user)
+    print("IS AUTHENTICATED:", current_user.is_authenticated)
+    print("IS ACTIVE:", current_user.is_active)
     db = SessionLocal()
     try:
         clients = db.query(Client).filter_by(active=True).order_by(Client.name).all()

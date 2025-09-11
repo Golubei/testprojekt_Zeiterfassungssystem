@@ -1,47 +1,63 @@
 from db import SessionLocal
-from models import User, Client, Zeitbuchung, UserRole
+from models import User, Client, Zeitbuchung, UserRole, AuditLog, AuditActionEnum
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 import random
+import json
 
 session = SessionLocal()
 
-# --- CREATE USERS ---
-users_data = [
-    {"id": 1, "first_name": "Chefin", "last_name": "Chefer", "email": "chef@example.com", "hashed_password": generate_password_hash("chefpass"), "role": UserRole.Chef, "active": True},
-    {"id": 2, "first_name": "Max", "last_name": "Beispiel", "email": "max@example.com", "hashed_password": generate_password_hash("maxpass"), "role": UserRole.User, "active": True},
-    {"id": 3, "first_name": "Tim", "last_name": "Meispiel", "email": "tim@example.com", "hashed_password": generate_password_hash("timpass"), "role": UserRole.User, "active": True},
-    {"id": 4, "first_name": "Ron", "last_name": "Peispiel", "email": "ron@example.com", "hashed_password": generate_password_hash("ronpass"), "role": UserRole.User, "active": True},
-    {"id": 5, "first_name": "Mike", "last_name": "Teispiel", "email": "mike@example.com", "hashed_password": generate_password_hash("mikepass"), "role": UserRole.User, "active": True},
-    {"id": 6, "first_name": "Tom", "last_name": "Reispiel", "email": "tom@example.com", "hashed_password": generate_password_hash("tompass"), "role": UserRole.User, "active": True},
+# --- ТИПОВІ НІМЕЦЬКІ ІМЕНА І ФАМІЛІЇ ---
+german_names = [
+    ("Max", "Müller"),
+    ("Anna", "Schmidt"),
+    ("Paul", "Schneider"),
+    ("Lena", "Fischer"),
+    ("Tim", "Weber")
 ]
+
+# --- CREATE USERS ---
+users_data = []
+for idx, (fname, lname) in enumerate(german_names, start=1):
+    users_data.append({
+        "first_name": fname,
+        "last_name": lname,
+        "email": f"user{idx}@axitest.de",
+        "hashed_password": generate_password_hash("123456"),
+        "role": UserRole.User,
+        "active": True
+    })
+
 for u in users_data:
-    if not session.query(User).filter_by(id=u["id"]).first():
+    if not session.query(User).filter_by(email=u["email"]).first():
         session.add(User(**u))
 
 # --- CREATE CLIENTS ---
 clients_data = [
-    {"id": 1, "name": "Aldi", "active": True},
-    {"id": 2, "name": "Netto", "active": True},
-    {"id": 3, "name": "Edeka", "active": True},
-    {"id": 4, "name": "GeraArcaden", "active": True},
-    {"id": 5, "name": "Action", "active": True},
+    {"name": "Netto", "active": True},
+    {"name": "Edeka", "active": True},
+    {"name": "Aldi", "active": True},
+    {"name": "GeraArkaden", "active": True},
+    {"name": "Teddi", "active": True},
 ]
 for c in clients_data:
-    if not session.query(Client).filter_by(id=c["id"]).first():
+    if not session.query(Client).filter_by(name=c["name"]).first():
         session.add(Client(**c))
 
 session.commit()
 
 # --- GENERATE ZEITBUCHUNGEN ---
-start_date = datetime(2024, 1, 1)
-end_date = datetime(2025, 9, 4)  # включно до 03.09.2025
+start_date = datetime(2022, 1, 1)
+end_date = datetime(2025, 9, 11)
 
-for user in session.query(User).filter_by(active=True).all():
-    for client in session.query(Client).filter_by(active=True).all():
+users = session.query(User).filter_by(active=True).all()
+clients = session.query(Client).filter_by(active=True).all()
+
+zeitbuchungen = []
+for user in users:
+    for client in clients:
         dt = start_date
         while dt < end_date:
-            # Генеруємо 1 сесію щотижня для кожного user+client
             zb = Zeitbuchung(
                 user_id=user.id,
                 client_id=client.id,
@@ -50,7 +66,29 @@ for user in session.query(User).filter_by(active=True).all():
                 comment=random.choice(["Projektarbeit", "Kundenhilfe", "Urlaub"])
             )
             session.add(zb)
+            zeitbuchungen.append(zb)
             dt += timedelta(days=7)
+session.commit()
+
+# --- GENERATE AUDIT LOGS ---
+actions = [AuditActionEnum.edit, AuditActionEnum.delete, AuditActionEnum.nachbuchung]
+zeitbuchungen_all = session.query(Zeitbuchung).all()
+for i in range(20):  # 20 записів аудиту
+    zb = random.choice(zeitbuchungen_all)
+    user = random.choice(users)
+    action = random.choice(actions)
+    details_dict = {
+        "old": {"comment": zb.comment, "end_time": zb.end_time.strftime("%Y-%m-%d %H:%M:%S")},
+        "new": {"comment": zb.comment + " (geändert)", "end_time": (zb.end_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")}
+    }
+    audit = AuditLog(
+        timestamp=datetime.utcnow() - timedelta(days=random.randint(0, 30)),
+        user_id=user.id,
+        session_id=zb.id,
+        action=action.value,
+        details=json.dumps(details_dict)
+    )
+    session.add(audit)
 session.commit()
 session.close()
 print("Генерація завершена!")

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SqlEnum, ForeignKey
@@ -11,6 +11,10 @@ class UserRole(Enum):
     User = "User"
     Chef = "Chef"
 
+def utcnow():
+    # Використовує timezone-aware datetime
+    return datetime.now(UTC)
+
 class User(Base, UserMixin):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
@@ -20,8 +24,8 @@ class User(Base, UserMixin):
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     zeitbuchungen = relationship("Zeitbuchung", back_populates="user")
 
@@ -34,8 +38,8 @@ class Client(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     zeitbuchungen = relationship("Zeitbuchung", back_populates="client")
 
@@ -51,8 +55,8 @@ class Zeitbuchung(Base):
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime)
     comment = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User", back_populates="zeitbuchungen")
     client = relationship("Client", back_populates="zeitbuchungen")
@@ -66,7 +70,7 @@ class AuditActionEnum(str, Enum):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
     user_id = Column(Integer, ForeignKey("users.id"))
     session_id = Column(Integer, ForeignKey("zeitbuchungen.id"), nullable=True)
     action = Column(String(20))

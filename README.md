@@ -91,7 +91,7 @@ I am passionate about web development and always eager to learn new technologies
 This project is my first full-stack application, built as a practical exercise to study Python, Flask, and modern development methods using GitHub Copilot and AI tools.
 
 - [My GitHub Profile](https://github.com/Golubei)
-- [LinkedIn](#) *(add your link)*
+- [LinkedIn](#) *(https://de.linkedin.com/in/golubei))*
 
 ---
 

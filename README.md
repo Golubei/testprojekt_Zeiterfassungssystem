@@ -47,6 +47,14 @@
 - **GitHub Copilot (AI coding assistant)**
 
 ---
+## ✅ Testing & Quality Assurance
+
+During development, I performed a series of test iterations to ensure the stability and correctness of the codebase.  
+- Each test run was documented in a separate file in the `tests/` directory (see `Testergebnis 1.md`, ..., `Testergebnis 7.md`).
+- The file `FinalTestergebnis.md` contains the results of the final, fully correct unit test suite.
+- This iterative approach helped me systematically find and fix bugs, and to achieve reliable results for all main features.
+
+You can review the detailed test results and progression in the `tests/` subfolder
 
 ## 📦 Installation
 
@@ -86,9 +94,10 @@
 
 ## 👨‍💻 About Me
 
-My name is **Golubei**.  
-I am passionate about web development and always eager to learn new technologies.  
-This project is my first full-stack application, built as a practical exercise to study Python, Flask, and modern development methods using GitHub Copilot and AI tools.
+My name is **Mykola Golubei**.  
+I am passionate about Product Management and Project Management, but I also want to develop my technical programming skills to be more effective in my work.
+This project is my first full-stack application, built as a practical exercise to improve my knowledge in Python, Flask, and modern development tools.
+I believe that strengthening my technical expertise will help me better understand development processes, communicate with engineering teams, and deliver more successful products.
 
 - [My GitHub Profile](https://github.com/Golubei)
 - [LinkedIn](#) *(https://de.linkedin.com/in/golubei))*

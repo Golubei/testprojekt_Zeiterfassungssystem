@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import re
 from datetime import datetime
 
@@ -60,3 +61,7 @@ def is_valid_id(val):
         return int(val) > 0
     except Exception:
         return False
+=======
+def sortiereListe(liste, key=None, reverse=False):
+    return sorted(liste, key=key, reverse=reverse)
+>>>>>>> feature_audit

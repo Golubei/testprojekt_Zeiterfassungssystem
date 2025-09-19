@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+from datetime import datetime
 from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SqlEnum, ForeignKey
@@ -32,6 +33,8 @@ class User(Base, UserMixin):
     @property
     def is_active(self):
         return self.active
+    def get_id(self):
+        return str(self.id)
 
 class Client(Base):
     __tablename__ = "clients"
@@ -62,6 +65,8 @@ class Zeitbuchung(Base):
     client = relationship("Client", back_populates="zeitbuchungen")
     # audit_logs = relationship("AuditLog", back_populates="session")  # optionally
 
+    # Для сортування можна використовувати start_time, created_at, updated_at, end_time тощо
+
 class AuditActionEnum(str, Enum):
     edit = "edit"
     delete = "delete"
@@ -77,3 +82,7 @@ class AuditLog(Base):
     details = Column(Text)
     user = relationship("User")
     # session = relationship("Zeitbuchung")  # optionally
+    action = Column(String(20))  # "edit", "delete", "nachbuchung"
+    details = Column(Text)       # JSON/dict-serialized old/new values
+
+    user = relationship("User")

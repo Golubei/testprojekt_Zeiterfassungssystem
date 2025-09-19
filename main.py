@@ -14,9 +14,17 @@ import json
 from models import AuditLog
 import traceback
 from utils import parse_dt, validate_email, passwords_match, strong_password, is_nonempty_string, hours_between, format_date, is_valid_id
+from utils import sortiereListe
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
+
+@app.route('/sort')
+def sort_handler():
+    data = [3, 1, 2]
+    return str(sortiereListe(data))
+
+# Flask-Login setup
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -878,6 +886,29 @@ def api_audit():
 @app.route("/test123")
 def test123():
     return "OK!"
+        
+@app.route('/test_sort_sessions')
+@login_required
+def test_sort_sessions():
+    db = SessionLocal()
+    try:
+        # Вибираємо всі сесії для поточного користувача
+        sessions = db.query(Zeitbuchung).filter_by(user_id=current_user.id).all()
+        # Сортуємо їх по часу створення (start_time)
+        from utils import sortiereListe
+        sorted_sessions = sortiereListe(sessions, key=lambda s: s.start_time)
+        # Повертаємо результат для перевірки (наприклад, id і час початку)
+        return jsonify([
+            {
+                "id": s.id,
+                "start_time": s.start_time.strftime('%Y-%m-%d %H:%M:%S') if s.start_time else None,
+                "end_time": s.end_time.strftime('%Y-%m-%d %H:%M:%S') if s.end_time else None,
+                "updated_at": s.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(s, 'updated_at') and s.updated_at else None
+            }
+            for s in sorted_sessions
+        ])
+    finally:
+        db.close()
         
 if __name__ == "__main__":
     app.run(debug=True)

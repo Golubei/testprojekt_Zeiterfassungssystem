@@ -1,5 +1,4 @@
 from datetime import datetime
-import calendar
 from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SqlEnum, ForeignKey
@@ -12,21 +11,20 @@ class UserRole(Enum):
     User = "User"
     Chef = "Chef"
 
-class User(Base, UserMixin):               # ДОДАТИ UserMixin!
+class User(Base, UserMixin):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(SqlEnum(UserRole), nullable=False)
-    first_name = Column(String, nullable=False)     # Ім'я
-    last_name = Column(String, nullable=False)      # Прізвище
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     zeitbuchungen = relationship("Zeitbuchung", back_populates="user")
 
-    # ДОДАТИ, якщо хочеш явну реалізацію (але UserMixin вже це має):
     def get_id(self):
         return str(self.id)
 
@@ -54,6 +52,8 @@ class Zeitbuchung(Base):
     user = relationship("User", back_populates="zeitbuchungen")
     client = relationship("Client", back_populates="zeitbuchungen")
 
+    # Для сортування можна використовувати start_time, created_at, updated_at, end_time тощо
+
 class AuditActionEnum(str, Enum):
     edit = "edit"
     delete = "delete"
@@ -67,4 +67,5 @@ class AuditLog(Base):
     session_id = Column(Integer, ForeignKey("zeitbuchungen.id"), nullable=True)
     action = Column(String(20))  # "edit", "delete", "nachbuchung"
     details = Column(Text)       # JSON/dict-serialized old/new values
+
     user = relationship("User")
